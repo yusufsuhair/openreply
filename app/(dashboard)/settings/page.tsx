@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import AccountHealth from "@/components/account-health";
+import WebhookSettings from "@/components/webhook-settings";
 import { invalidateApiCache, requestData } from "@/lib/use-api-data";
 import { Suspense, useEffect, useState } from "react";
 import type { AccountOption } from "@/components/account-select";
@@ -144,6 +145,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
+      <WebhookSettings />
       <AccountHealth />
       <Link
         href="/diagnostics"

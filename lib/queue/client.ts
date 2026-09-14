@@ -42,6 +42,7 @@ export interface ProcessPostbackJob {
   payload: string;
   mid?: string;
   fallback?: boolean;
+  timestamp?: number;
 }
 
 // Scheduled after the link is delivered, to send the appreciation follow-up.
@@ -52,6 +53,7 @@ export interface ProcessFollowUpJob {
   userId: string;
   automationId: string;
   commenterName?: string | null;
+  windowExpiresAt?: number;
 }
 
 // An inbound DM from a user. Campaigns with `dmTriggerEnabled` whose keywords
@@ -61,6 +63,8 @@ export interface ProcessMessageJob {
   messageId: string;
   messageText: string;
   senderId: string;
+  trigger?: "dm" | "story_reply" | "story_mention";
+  timestamp?: number;
 }
 
 export type DmQueueJob =

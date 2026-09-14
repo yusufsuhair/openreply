@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   const pending = await prisma.automation.findMany({
-    where: { pendingNextReel: true },
+    where: { pendingNextReel: true, commentTriggerEnabled: true },
     include: { instagramAccount: true },
   });
 

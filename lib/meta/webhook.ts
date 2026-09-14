@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 export function verifyWebhookSignature(
   payload: string,
-  signature: string | null
+  signature: string | null,
 ): boolean {
   if (!signature) return false;
 
@@ -17,7 +17,7 @@ export function verifyWebhookSignature(
 
   if (secrets.length === 0) {
     throw new Error(
-      "FACEBOOK_APP_SECRET or INSTAGRAM_APP_SECRET is required to verify webhooks"
+      "FACEBOOK_APP_SECRET or INSTAGRAM_APP_SECRET is required to verify webhooks",
     );
   }
 
@@ -61,6 +61,7 @@ interface WebhookEntry {
     };
   }>;
   messaging?: Array<{
+    timestamp?: number;
     sender?: { id?: string };
     recipient?: { id?: string };
     postback?: { mid?: string; title?: string; payload?: string };
@@ -71,6 +72,7 @@ interface WebhookEntry {
       is_echo?: boolean;
       is_deleted?: boolean;
       is_unsupported?: boolean;
+      reply_to?: { story?: { id?: string; url?: string } };
       attachments?: Array<{ type?: string }>;
     };
   }>;
@@ -81,6 +83,8 @@ export interface WebhookMessageEvent {
   messageId: string;
   messageText: string;
   senderId: string;
+  trigger?: "dm" | "story_reply" | "story_mention";
+  timestamp?: number;
 }
 
 export interface WebhookPostbackEvent {
@@ -88,6 +92,7 @@ export interface WebhookPostbackEvent {
   userId: string;
   payload: string;
   mid?: string;
+  timestamp?: number;
 }
 
 export interface WebhookReadEvent {
@@ -101,7 +106,9 @@ interface WebhookPayload {
   entry: WebhookEntry[];
 }
 
-export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent[] {
+export function parseCommentEvents(
+  payload: WebhookPayload,
+): WebhookCommentEvent[] {
   const events: WebhookCommentEvent[] = [];
 
   if (payload.object !== "instagram") {
@@ -147,7 +154,7 @@ export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent
  * payload. Each event carries the tapping user's IGSID and our postback payload.
  */
 export function parsePostbackEvents(
-  payload: WebhookPayload
+  payload: WebhookPayload,
 ): WebhookPostbackEvent[] {
   const events: WebhookPostbackEvent[] = [];
 
@@ -168,6 +175,9 @@ export function parsePostbackEvents(
         userId,
         payload: postbackPayload,
         mid: messaging.postback?.mid,
+        ...(messaging.timestamp !== undefined
+          ? { timestamp: messaging.timestamp }
+          : {}),
       });
     }
   }
@@ -186,7 +196,7 @@ export function parsePostbackEvents(
  * containing its own keyword trigger itself.
  */
 export function parseMessageEvents(
-  payload: WebhookPayload
+  payload: WebhookPayload,
 ): WebhookMessageEvent[] {
   const events: WebhookMessageEvent[] = [];
 
@@ -205,15 +215,31 @@ export function parseMessageEvents(
       const senderId = messaging.sender?.id;
       const accountId = entry.id ?? messaging.recipient?.id;
 
-      if (!text || !messageId || !senderId || !accountId) continue;
+      const trigger = message.attachments?.some(
+        (a) => a.type === "story_mention",
+      )
+        ? "story_mention"
+        : message.reply_to?.story
+          ? "story_reply"
+          : "dm";
+      if (
+        (!text && trigger !== "story_mention") ||
+        !messageId ||
+        !senderId ||
+        !accountId
+      )
+        continue;
       // Ignore anything the connected account sent to itself.
       if (senderId === accountId) continue;
 
       events.push({
         instagramAccountId: accountId,
         messageId,
-        messageText: text,
+        messageText: text ?? "",
         senderId,
+        ...(trigger !== "dm"
+          ? { trigger, timestamp: messaging.timestamp }
+          : {}),
       });
     }
   }

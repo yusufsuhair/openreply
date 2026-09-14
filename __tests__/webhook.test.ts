@@ -299,6 +299,57 @@ describe("parseMessageEvents", () => {
     } as Parameters<typeof parseMessageEvents>[0];
   }
 
+  it("separates Story replies and attachment-only mentions from ordinary DMs", () => {
+    const base = {
+      sender: { id: "user_999" },
+      recipient: { id: "ig_456" },
+      timestamp: 1789387200000,
+    };
+    const events = parseMessageEvents(
+      messagingPayload([
+        {
+          ...base,
+          message: {
+            mid: "reply",
+            text: "LINK",
+            reply_to: { story: { id: "story" } },
+          },
+        },
+        {
+          ...base,
+          message: { mid: "mention", attachments: [{ type: "story_mention" }] },
+        },
+        {
+          ...base,
+          message: {
+            mid: "echo",
+            text: "LINK",
+            is_echo: true,
+            reply_to: { story: { id: "story" } },
+          },
+        },
+      ]),
+    );
+    expect(events).toEqual([
+      {
+        instagramAccountId: "ig_456",
+        senderId: "user_999",
+        messageId: "reply",
+        messageText: "LINK",
+        trigger: "story_reply",
+        timestamp: base.timestamp,
+      },
+      {
+        instagramAccountId: "ig_456",
+        senderId: "user_999",
+        messageId: "mention",
+        messageText: "",
+        trigger: "story_mention",
+        timestamp: base.timestamp,
+      },
+    ]);
+  });
+
   it("should parse an inbound DM", () => {
     const payload = messagingPayload([
       {
@@ -344,8 +395,8 @@ describe("parseMessageEvents", () => {
             recipient: { id: "ig_456" },
             message: { mid: "mid_b", text: "link", is_unsupported: true },
           },
-        ])
-      )
+        ]),
+      ),
     ).toHaveLength(0);
   });
 
@@ -401,7 +452,7 @@ describe("parseMessageEvents", () => {
             ],
           },
         ],
-      })
+      }),
     ).toHaveLength(0);
   });
 });

@@ -41,6 +41,9 @@ interface LoadedCampaign {
   keywords: string[];
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
+  commentTriggerEnabled: boolean;
+  storyReplyEnabled: boolean;
+  storyMentionEnabled: boolean;
   dmMessage: string;
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
@@ -173,6 +176,9 @@ export default function CampaignBuilder({
   const [matchMode, setMatchMode] = useState<MatchMode>("specific");
   const [keywordText, setKeywordText] = useState("");
   const [dmTriggerEnabled, setDmTriggerEnabled] = useState(false);
+  const [commentTriggerEnabled, setCommentTriggerEnabled] = useState(true);
+  const [storyReplyEnabled, setStoryReplyEnabled] = useState(false);
+  const [storyMentionEnabled, setStoryMentionEnabled] = useState(false);
 
   const [publicReplyEnabled, setPublicReplyEnabled] = useState(false);
   const [publicReplyMessages, setPublicReplyMessages] = useState<string[]>([
@@ -300,6 +306,9 @@ export default function CampaignBuilder({
         setMatchMode(c.matchAnyWord ? "any" : "specific");
         setKeywordText(c.keywords.join(", "));
         setDmTriggerEnabled(c.dmTriggerEnabled ?? false);
+        setCommentTriggerEnabled(c.commentTriggerEnabled ?? true);
+        setStoryReplyEnabled(c.storyReplyEnabled ?? false);
+        setStoryMentionEnabled(c.storyMentionEnabled ?? false);
         setPublicReplyEnabled(c.publicReplyEnabled);
         setPublicReplyMessages(
           c.publicReplyMessages?.length
@@ -434,9 +443,13 @@ export default function CampaignBuilder({
 
     if (!selectedAccountId)
       return setError("Connect an Instagram account first.");
-    if (triggerScope === "specific" && !postId)
+    if (commentTriggerEnabled && triggerScope === "specific" && !postId)
       return setError("Pick a post or reel to trigger the campaign.");
-    if (matchMode === "specific" && keywords.length === 0)
+    if (
+      (commentTriggerEnabled || dmTriggerEnabled || storyReplyEnabled) &&
+      matchMode === "specific" &&
+      keywords.length === 0
+    )
       return setError("Add at least one keyword, or switch to any word.");
     if (!dmMessage.trim()) return setError("Add the DM with the link.");
     if (
@@ -457,6 +470,9 @@ export default function CampaignBuilder({
       matchAnyWord: matchMode === "any",
       keywords: matchMode === "any" ? [] : keywords,
       dmTriggerEnabled,
+      commentTriggerEnabled,
+      storyReplyEnabled,
+      storyMentionEnabled,
       dmMessage,
       openingDmEnabled,
       openingDmMessage: openingDmEnabled ? openingDmMessage : null,
@@ -737,38 +753,81 @@ export default function CampaignBuilder({
             )}
           </div>
 
-          <Section title="When someone comments on">
-            <Radio
-              checked={triggerScope === "specific"}
-              onSelect={() => setTriggerScope("specific")}
-            >
-              a specific post or reel
-            </Radio>
-            {triggerScope === "specific" && (
-              <div className="rounded-lg border border-border p-2">
-                <PostPicker
-                  selectedPostId={postId}
-                  instagramAccountId={selectedAccountId}
-                  usedPostIds={usedPosts}
-                  onSelect={handlePostSelect}
+          <Section title="Triggers">
+            <p className="text-sm text-muted">
+              Story triggers start off. Choose the events this campaign responds
+              to, then save. Pause the campaign while setting it up.
+            </p>
+            {[
+              {
+                label: "Post or reel comments",
+                on: commentTriggerEnabled,
+                toggle: () => setCommentTriggerEnabled(!commentTriggerEnabled),
+              },
+              {
+                label: "Story replies",
+                on: storyReplyEnabled,
+                toggle: () => setStoryReplyEnabled(!storyReplyEnabled),
+              },
+              {
+                label: "Story mentions",
+                on: storyMentionEnabled,
+                toggle: () => setStoryMentionEnabled(!storyMentionEnabled),
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="flex min-h-11 items-center justify-between gap-3"
+              >
+                <span className="text-sm">{item.label}</span>
+                <Toggle
+                  label={item.label}
+                  on={item.on}
+                  onToggle={item.toggle}
                 />
               </div>
-            )}
-            <Radio
-              checked={triggerScope === "any"}
-              onSelect={() => setTriggerScope("any")}
-            >
-              any post or reel
-            </Radio>
-            <Radio
-              checked={triggerScope === "next"}
-              onSelect={() => setTriggerScope("next")}
-            >
-              next post or reel
-            </Radio>
+            ))}
+            <p className="text-xs text-muted">
+              Story replies use the keywords below across your stories. Mentions
+              respond when Instagram sends a mention event, without requiring a
+              keyword. Story views do not trigger a DM. Both reuse this
+              campaign’s message and follow gate; opening DMs and public comment
+              replies apply only to comments.
+            </p>
           </Section>
-
-          <Section title="And this comment has">
+          {commentTriggerEnabled && (
+            <Section title="When someone comments on">
+              <Radio
+                checked={triggerScope === "specific"}
+                onSelect={() => setTriggerScope("specific")}
+              >
+                a specific post or reel
+              </Radio>
+              {triggerScope === "specific" && (
+                <div className="rounded-lg border border-border p-2">
+                  <PostPicker
+                    selectedPostId={postId}
+                    instagramAccountId={selectedAccountId}
+                    usedPostIds={usedPosts}
+                    onSelect={handlePostSelect}
+                  />
+                </div>
+              )}
+              <Radio
+                checked={triggerScope === "any"}
+                onSelect={() => setTriggerScope("any")}
+              >
+                any post or reel
+              </Radio>
+              <Radio
+                checked={triggerScope === "next"}
+                onSelect={() => setTriggerScope("next")}
+              >
+                next post or reel
+              </Radio>
+            </Section>
+          )}
+          <Section title="Match comment / message text">
             <Radio
               checked={matchMode === "specific"}
               onSelect={() => setMatchMode("specific")}
@@ -812,17 +871,19 @@ export default function CampaignBuilder({
                   : "A DM containing any of these words gets the same reply, no comment needed."}
               </p>
             )}
-            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-              <span className="text-sm text-foreground">
-                reply to their comments under the post
-              </span>
-              <Toggle
-                label="Reply to comments"
-                on={publicReplyEnabled}
-                onToggle={() => setPublicReplyEnabled(!publicReplyEnabled)}
-              />
-            </div>
-            {publicReplyEnabled && (
+            {commentTriggerEnabled && (
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                <span className="text-sm text-foreground">
+                  reply to their comments under the post
+                </span>
+                <Toggle
+                  label="Reply to comments"
+                  on={publicReplyEnabled}
+                  onToggle={() => setPublicReplyEnabled(!publicReplyEnabled)}
+                />
+              </div>
+            )}
+            {commentTriggerEnabled && publicReplyEnabled && (
               <div className="space-y-2">
                 {publicReplyMessages.map((msg, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -875,35 +936,37 @@ export default function CampaignBuilder({
           </Section>
 
           <Section title="They will get">
-            <div className="rounded-lg border border-border p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-foreground">an opening DM</span>
-                <Toggle
-                  label="Send an opening DM"
-                  on={openingDmEnabled}
-                  onToggle={() => setOpeningDmEnabled(!openingDmEnabled)}
-                />
-              </div>
-              {openingDmEnabled && (
-                <div className="mt-3 space-y-2">
-                  <textarea
-                    value={openingDmMessage}
-                    onChange={(e) => setOpeningDmMessage(e.target.value)}
-                    placeholder="Hey there! I'm so happy you're here 😊"
-                    rows={3}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
-                    maxLength={1000}
-                  />
-                  <input
-                    value={openingDmButtonLabel}
-                    onChange={(e) => setOpeningDmButtonLabel(e.target.value)}
-                    placeholder="Send me the link"
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
-                    maxLength={64}
+            {commentTriggerEnabled && (
+              <div className="rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">an opening DM</span>
+                  <Toggle
+                    label="Send an opening DM"
+                    on={openingDmEnabled}
+                    onToggle={() => setOpeningDmEnabled(!openingDmEnabled)}
                   />
                 </div>
-              )}
-            </div>
+                {openingDmEnabled && (
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      value={openingDmMessage}
+                      onChange={(e) => setOpeningDmMessage(e.target.value)}
+                      placeholder="Hey there! I'm so happy you're here 😊"
+                      rows={3}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
+                      maxLength={1000}
+                    />
+                    <input
+                      value={openingDmButtonLabel}
+                      onChange={(e) => setOpeningDmButtonLabel(e.target.value)}
+                      placeholder="Send me the link"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                      maxLength={64}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             <div className="mt-3 rounded-lg border border-border p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-foreground">

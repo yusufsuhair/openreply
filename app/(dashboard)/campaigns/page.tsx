@@ -25,6 +25,7 @@ interface Campaign {
   matchAnyPost: boolean;
   keywords: string[];
   matchAnyWord: boolean;
+  commentTriggerEnabled: boolean;
   dmMessage: string;
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
@@ -218,7 +219,12 @@ export default function CampaignsPage() {
           postUrl: specific ? auto.postUrl : null,
           matchAnyPost: auto.matchAnyPost,
           pendingNextReel: auto.pendingNextReel,
-          matchAnyWord: auto.matchAnyWord,
+          matchAnyWord:
+            auto.matchAnyWord ||
+            (!auto.commentTriggerEnabled && auto.keywords.length === 0),
+          commentTriggerEnabled: auto.commentTriggerEnabled,
+          storyReplyEnabled: false,
+          storyMentionEnabled: false,
           keywords: auto.keywords,
           dmMessage: auto.dmMessage,
           openingDmEnabled: auto.openingDmEnabled,

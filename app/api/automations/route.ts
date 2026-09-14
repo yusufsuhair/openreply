@@ -27,6 +27,9 @@ const createAutomationSchema = z
     keywords: z.array(z.string().min(1).max(50)).max(10).optional().default([]),
     matchAnyWord: z.boolean().optional().default(false),
     dmTriggerEnabled: z.boolean().optional().default(false),
+    commentTriggerEnabled: z.boolean().optional().default(true),
+    storyReplyEnabled: z.boolean().optional().default(false),
+    storyMentionEnabled: z.boolean().optional().default(false),
     dmMessage: z.string().min(1).max(1000),
     openingDmEnabled: z.boolean().optional().default(false),
     openingDmMessage: z.string().max(1000).optional().nullable(),
@@ -68,15 +71,31 @@ const createAutomationSchema = z
     wholeWordMatch: z.boolean().optional().default(true),
   })
   // A campaign must target a specific post, any post, or the next reel.
-  .refine((d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId), {
-    message: "Choose which post(s) trigger the campaign",
-    path: ["postId"],
-  })
+  .refine(
+    (d) =>
+      !d.commentTriggerEnabled ||
+      d.matchAnyPost ||
+      d.pendingNextReel ||
+      Boolean(d.postId),
+    {
+      message: "Choose which post(s) trigger the campaign",
+      path: ["postId"],
+    },
+  )
   // And it must match either specific words or any word.
-  .refine((d) => d.matchAnyWord || d.keywords.length >= 1, {
-    message: "Add at least one keyword, or match any word",
-    path: ["keywords"],
-  })
+  .refine(
+    (d) =>
+      (d.storyMentionEnabled &&
+        !d.commentTriggerEnabled &&
+        !d.dmTriggerEnabled &&
+        !d.storyReplyEnabled) ||
+      d.matchAnyWord ||
+      d.keywords.length >= 1,
+    {
+      message: "Add at least one keyword, or match any word",
+      path: ["keywords"],
+    },
+  )
   // An opening DM needs both a message and a button label.
   .refine(
     (d) =>
@@ -99,6 +118,9 @@ const updateAutomationSchema = z.object({
   keywords: z.array(z.string().min(1).max(50)).max(10).optional(),
   matchAnyWord: z.boolean().optional(),
   dmTriggerEnabled: z.boolean().optional(),
+  commentTriggerEnabled: z.boolean().optional(),
+  storyReplyEnabled: z.boolean().optional(),
+  storyMentionEnabled: z.boolean().optional(),
   dmMessage: z.string().min(1).max(1000).optional(),
   openingDmEnabled: z.boolean().optional(),
   openingDmMessage: z.string().max(1000).optional().nullable(),
@@ -420,6 +442,9 @@ export async function POST(request: NextRequest) {
       keywords: matchAnyWord ? [] : parsed.data.keywords,
       matchAnyWord,
       dmTriggerEnabled: parsed.data.dmTriggerEnabled,
+      commentTriggerEnabled: parsed.data.commentTriggerEnabled,
+      storyReplyEnabled: parsed.data.storyReplyEnabled,
+      storyMentionEnabled: parsed.data.storyMentionEnabled,
       dmMessage: parsed.data.dmMessage,
       openingDmEnabled,
       openingDmMessage: openingDmEnabled
@@ -518,6 +543,22 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       { success: false, error: "Campaign not found" },
       { status: 404 },
+    );
+  }
+
+  const merged = { ...existing, ...parsed.data };
+  if (
+    merged.commentTriggerEnabled &&
+    !merged.matchAnyPost &&
+    !merged.pendingNextReel &&
+    !merged.postId
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Choose a post before enabling comment triggers",
+      },
+      { status: 400 },
     );
   }
 

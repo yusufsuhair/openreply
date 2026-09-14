@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     { success: false, error: "Verification failed" },
-    { status: 403 }
+    { status: 403 },
   );
 }
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       .catch(() => {});
     return NextResponse.json(
       { success: false, error: "Invalid signature" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { success: false, error: "Invalid JSON" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const commentEvents = parseCommentEvents(
-      payload as Parameters<typeof parseCommentEvents>[0]
+      payload as Parameters<typeof parseCommentEvents>[0],
     );
     const queue = getDMQueue();
 
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         },
         {
           jobId: `comment_${event.instagramAccountId}_${event.commentId}`,
-        }
+        },
       );
 
       if (account) {
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     // Button taps from opening DMs → deliver the reveal message.
     const postbackEvents = parsePostbackEvents(
-      payload as Parameters<typeof parsePostbackEvents>[0]
+      payload as Parameters<typeof parsePostbackEvents>[0],
     );
 
     for (const event of postbackEvents) {
@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
           userId: event.userId,
           payload: event.payload,
           mid: event.mid,
+          timestamp: event.timestamp,
         },
         {
           // BullMQ forbids ":" in custom job ids, and the payload is
@@ -134,13 +135,13 @@ export async function POST(request: NextRequest) {
           jobId: `postback_${event.instagramAccountId}_${event.userId}_${(
             event.mid ?? event.payload
           ).replace(/:/g, "_")}`,
-        }
+        },
       );
     }
 
     // Inbound DMs → keyword-triggered autoreply.
     const messageEvents = parseMessageEvents(
-      payload as Parameters<typeof parseMessageEvents>[0]
+      payload as Parameters<typeof parseMessageEvents>[0],
     );
 
     for (const event of messageEvents) {
@@ -156,6 +157,8 @@ export async function POST(request: NextRequest) {
           messageId: event.messageId,
           messageText: event.messageText,
           senderId: event.senderId,
+          trigger: event.trigger,
+          timestamp: event.timestamp,
         },
         {
           // Message ids can contain characters BullMQ rejects in a job id (":"
@@ -163,9 +166,9 @@ export async function POST(request: NextRequest) {
           // and stays injective — substituting invalid characters would let two
           // distinct mids collapse onto one job id, silently dropping a reply.
           jobId: `message_${event.instagramAccountId}_${Buffer.from(
-            event.messageId
+            event.messageId,
           ).toString("base64url")}`,
-        }
+        },
       );
 
       if (account) {
@@ -180,7 +183,7 @@ export async function POST(request: NextRequest) {
     // same next-step DM after five minutes. The worker no-ops this delayed job
     // if a real button tap has already delivered the reveal.
     const readEvents = parseReadEvents(
-      payload as Parameters<typeof parseReadEvents>[0]
+      payload as Parameters<typeof parseReadEvents>[0],
     );
 
     for (const event of readEvents) {
@@ -222,7 +225,7 @@ export async function POST(request: NextRequest) {
           {
             delay: OPENING_DM_READ_FALLBACK_DELAY_MS,
             jobId: `read_fallback_${event.instagramAccountId}_${event.userId}_${automation.id}`,
-          }
+          },
         );
       }
     }
@@ -249,7 +252,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { success: false, error: "Webhook processing failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

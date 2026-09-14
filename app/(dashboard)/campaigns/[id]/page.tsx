@@ -31,6 +31,9 @@ interface Campaign {
   keywords: string[];
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
+  commentTriggerEnabled: boolean;
+  storyReplyEnabled: boolean;
+  storyMentionEnabled: boolean;
   dmMessage: string;
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
@@ -194,27 +197,43 @@ export default function CampaignDetailPage() {
           </span>
         </div>
 
-        <Summary title="When someone comments on">
-          <div className="flex items-center gap-3">
-            {postThumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={postThumb}
-                alt="Post"
-                className="h-14 w-14 rounded object-cover"
-              />
-            ) : (
-              <div className="grid h-14 w-14 place-items-center rounded bg-surface-hover text-[10px] text-muted">
-                {campaign.matchAnyPost || campaign.pendingNextReel
-                  ? "Any"
-                  : "Post"}
-              </div>
-            )}
-            <span className="text-sm text-foreground">{trigger}</span>
-          </div>
+        <Summary title="Triggers">
+          <p className="text-sm">
+            Comments: {campaign.commentTriggerEnabled === false ? "Off" : "On"}{" "}
+            · DMs: {campaign.dmTriggerEnabled ? "On" : "Off"}
+          </p>
+          <p className="text-sm">
+            Story replies: {campaign.storyReplyEnabled ? "On" : "Off"} · Story
+            mentions: {campaign.storyMentionEnabled ? "On" : "Off"}
+          </p>
+          <p className="text-xs text-muted">
+            Story replies use campaign keywords. Mentions match without
+            keywords. Configure in Edit.
+          </p>
         </Summary>
+        {campaign.commentTriggerEnabled !== false && (
+          <Summary title="When someone comments on">
+            <div className="flex items-center gap-3">
+              {postThumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={postThumb}
+                  alt="Post"
+                  className="h-14 w-14 rounded object-cover"
+                />
+              ) : (
+                <div className="grid h-14 w-14 place-items-center rounded bg-surface-hover text-[10px] text-muted">
+                  {campaign.matchAnyPost || campaign.pendingNextReel
+                    ? "Any"
+                    : "Post"}
+                </div>
+              )}
+              <span className="text-sm text-foreground">{trigger}</span>
+            </div>
+          </Summary>
+        )}
 
-        <Summary title="And this comment has">
+        <Summary title="Match comment / message text">
           <FieldBox>{matchText}</FieldBox>
           {campaign.dmTriggerEnabled && (
             <p className="text-xs text-muted">
@@ -222,24 +241,28 @@ export default function CampaignDetailPage() {
               {campaign.matchAnyWord ? "anything" : "these words"}.
             </p>
           )}
-          {publicReplies.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-xs text-muted">Public reply under the post</p>
-              {publicReplies.map((m, i) => (
-                <FieldBox key={i}>{m}</FieldBox>
-              ))}
-            </div>
-          )}
+          {campaign.commentTriggerEnabled !== false &&
+            publicReplies.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted">
+                  Public reply under the post
+                </p>
+                {publicReplies.map((m, i) => (
+                  <FieldBox key={i}>{m}</FieldBox>
+                ))}
+              </div>
+            )}
         </Summary>
 
-        {campaign.openingDmEnabled && (
-          <Summary title="They will get an opening DM">
-            <FieldBox>
-              {campaign.openingDmMessage || "Opening message"}
-            </FieldBox>
-            <FieldBox>{campaign.openingDmButtonLabel || "Button"}</FieldBox>
-          </Summary>
-        )}
+        {campaign.commentTriggerEnabled !== false &&
+          campaign.openingDmEnabled && (
+            <Summary title="They will get an opening DM">
+              <FieldBox>
+                {campaign.openingDmMessage || "Opening message"}
+              </FieldBox>
+              <FieldBox>{campaign.openingDmButtonLabel || "Button"}</FieldBox>
+            </Summary>
+          )}
 
         {campaign.requireFollow && (
           <Summary title="They must follow first">

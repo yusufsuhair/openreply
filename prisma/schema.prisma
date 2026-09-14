@@ -83,6 +83,7 @@ model Workspace {
   trackedLinks      TrackedLink[]
   linkClicks        LinkClick[]
   webhookEvents     WebhookEvent[]
+  outgoingWebhook   OutgoingWebhook?
   operationalEvents OperationalEvent[]
 
   @@index([ownerId])
@@ -182,6 +183,9 @@ model Automation {
   // keywords above. Independent of the post trigger — a DM has no media, so
   // postId / matchAnyPost do not apply to it.
   dmTriggerEnabled Boolean @default(false)
+  commentTriggerEnabled Boolean @default(true)
+  storyReplyEnabled Boolean @default(false)
+  storyMentionEnabled Boolean @default(false)
   dmMessage      String
   openingDmEnabled     Boolean @default(false)
   openingDmMessage     String?
@@ -245,6 +249,10 @@ model DmLog {
   workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   automation       Automation       @relation(fields: [automationId], references: [id], onDelete: Cascade)
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  webhookDeliveries WebhookDelivery[]
+
+  @@index([workspaceId, status, dmSentAt])
 
   @@unique([automationId, commentId])
   @@index([workspaceId])
@@ -385,4 +393,36 @@ enum OperationalEventLevel {
   INFO
   WARNING
   ERROR
+}
+
+model OutgoingWebhook {
+  id String @id @default(cuid())
+  workspaceId String @unique
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  url String
+  secret String
+  enabled Boolean @default(false)
+  enabledAt DateTime?
+  revision String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id String @id @default(cuid())
+  webhookId String
+  webhook OutgoingWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  dmLogId String
+  dmLog DmLog @relation(fields: [dmLogId], references: [id], onDelete: Cascade)
+  revision String
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  httpStatus Int?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([webhookId, dmLogId])
+  @@index([webhookId, status, nextAttemptAt])
 }

@@ -2,6 +2,7 @@ import { createDMWorker } from "@/lib/queue/dm-worker";
 import { recordWorkerHeartbeat } from "@/lib/ops/worker-health";
 import { reconcileComments } from "@/lib/polling/comment-reconciler";
 import os from "node:os";
+import { dispatchWebhooks } from "@/lib/integrations/webhook-dispatch";
 
 const worker = createDMWorker();
 const startedAt = new Date().toISOString();
@@ -9,7 +10,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 // Polling safety net for comments that webhooks miss. Runs in the worker because
 // it must fire every few minutes and Vercel's free crons only run once a day.
 const POLL_INTERVAL_MS = Number(
-  process.env.COMMENT_POLL_INTERVAL_MS ?? 5 * 60_000
+  process.env.COMMENT_POLL_INTERVAL_MS ?? 5 * 60_000,
 );
 
 console.log("[DM Worker] Started");
@@ -28,7 +29,10 @@ async function heartbeat() {
 }
 
 void heartbeat();
-const heartbeatTimer = setInterval(() => void heartbeat(), HEARTBEAT_INTERVAL_MS);
+const heartbeatTimer = setInterval(
+  () => void heartbeat(),
+  HEARTBEAT_INTERVAL_MS,
+);
 
 async function poll() {
   try {
@@ -42,11 +46,27 @@ async function poll() {
 // Kick off one sweep shortly after boot, then on a fixed interval.
 setTimeout(() => void poll(), 10_000);
 const pollTimer = setInterval(() => void poll(), POLL_INTERVAL_MS);
+let webhookTask: Promise<void> | null = null;
+function pollWebhooks() {
+  if (webhookTask) return;
+  webhookTask = dispatchWebhooks()
+    .catch(() => {
+      console.error(
+        "[Integrations] Webhook dispatch failed; will retry on next interval",
+      );
+    })
+    .finally(() => {
+      webhookTask = null;
+    });
+}
+const webhookTimer = setInterval(pollWebhooks, 30_000);
 
 async function shutdown(signal: string) {
   console.log(`[DM Worker] ${signal} received, closing worker`);
   clearInterval(heartbeatTimer);
   clearInterval(pollTimer);
+  clearInterval(webhookTimer);
+  await webhookTask;
   await worker.close();
   process.exit(0);
 }
