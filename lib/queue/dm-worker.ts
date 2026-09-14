@@ -1228,6 +1228,30 @@ async function recordWorkerFailure(
       instagramAccountId,
       commentId: commentId ?? undefined,
     });
+
+    const alertKind =
+      error instanceof TokenExpiredError
+        ? "instagram_token_invalid"
+        : (job?.attemptsMade ?? 0) >= 3
+          ? "worker_job_failed"
+          : null;
+    if (alertKind && instagramAccountId) {
+      const response = await fetch(`${process.env.NEXTAUTH_URL}/api/internal/alerts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.CRON_SECRET || process.env.NEXTAUTH_SECRET}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: alertKind,
+          instagramId: instagramAccountId,
+          message: error.message,
+        }),
+      });
+      if (!response.ok) {
+        console.error("[DM Worker] Email alert failed:", response.status);
+      }
+    }
   } catch (recordError) {
     console.error(
       "[DM Worker] Failed to record worker failure:",
@@ -1283,4 +1307,3 @@ export function createDMWorker(): Worker<DmQueueJob> {
 
   return worker;
 }
-
