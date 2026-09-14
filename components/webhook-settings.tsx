@@ -66,11 +66,8 @@ export default function WebhookSettings() {
         </span>
       </div>
       <p className="text-sm text-muted">
-        Connect n8n, Make or your own receiver. Once enabled, successful
-        campaign delivery records create message.sent events (one event per
-        record). Repeat sends that reuse a delivery record do not create another
-        event. This includes opening messages and follow prompts; it does not
-        confirm a link click, signup or purchase.
+        Connect n8n, Make or your own receiver. Save your endpoint first, then
+        enable it when ready.
       </p>
       <DataFeedback {...result} />
       {saved && (
@@ -87,9 +84,8 @@ export default function WebhookSettings() {
             />
           </label>
           <p className="text-xs text-muted">
-            Payload: event ID/time, campaign ID/name, account ID, Instagram
-            sender ID, matched keyword and delivery log ID. Message text, email
-            and access tokens are excluded.
+            Once enabled, shares campaign details and Instagram sender IDs after
+            a successful DM delivery.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -110,10 +106,8 @@ export default function WebhookSettings() {
             )}
           </div>
           <p className="text-xs text-muted">
-            Changing the URL saves it off and generates a new signing secret.
-            Disabled integrations send nothing. Disabling cancels queued events;
-            an in-flight request may finish. Enabling starts from now, without
-            historical backfill.
+            New or changed endpoints stay off until enabled. Only future
+            deliveries are included.
           </p>
         </>
       )}
@@ -143,12 +137,34 @@ export default function WebhookSettings() {
           </button>
         </div>
       )}
-      <p className="text-xs text-muted">
-        Verify X-OpenReply-Signature against HMAC-SHA256 of timestamp +
-        &quot;.&quot; + the raw request body, using the signing secret. Reject
-        old timestamps and deduplicate using X-OpenReply-Event-Id. Up to 3
-        attempts; a timeout can mean your receiver already accepted the event.
-      </p>
+      <details className="text-sm">
+        <summary className="min-h-11 cursor-pointer py-3 font-medium">
+          Receiver setup and event details
+        </summary>
+        <div className="space-y-3 text-xs text-muted">
+          <p>
+            One message.sent event per successful delivery record. Opening
+            messages and follow prompts count; repeat sends that reuse a record
+            do not create another event. This is not a signup or purchase event.
+          </p>
+          <p>
+            Payload: event ID/time, campaign ID/name, account ID, Instagram
+            sender ID, matched keyword and delivery log ID. Message text, email
+            and access tokens are excluded.
+          </p>
+          <p>
+            Changing the URL generates a new signing secret. Disabling cancels
+            queued events; a request already in flight may finish.
+          </p>
+          <p>
+            Verify X-OpenReply-Signature against HMAC-SHA256 of timestamp +
+            &quot;.&quot; + the raw request body, using the signing secret.
+            Reject old timestamps and deduplicate using X-OpenReply-Event-Id. Up
+            to 3 attempts; a timeout can mean your receiver already accepted the
+            event.
+          </p>
+        </div>
+      </details>
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Recent deliveries</h3>
         {saved && !saved.deliveries.length && (

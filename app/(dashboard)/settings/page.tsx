@@ -145,7 +145,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
-      <WebhookSettings />
       <AccountHealth />
       <Link
         href="/diagnostics"
@@ -246,6 +245,8 @@ export default function SettingsPage() {
           </a>
         </div>
       </section>
+
+      <WebhookSettings />
 
       <section className="panel rounded p-4 sm:p-6">
         <h2 className="text-base font-semibold mb-6">Team</h2>
