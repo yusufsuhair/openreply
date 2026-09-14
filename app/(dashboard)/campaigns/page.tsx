@@ -330,49 +330,90 @@ export default function CampaignsPage() {
           return (
             <article
               key={auto.id}
-              className="rounded-xl border border-border p-4"
+              className="grid min-h-40 grid-cols-[5rem_minmax(0,1fr)_5.25rem] overflow-hidden rounded-xl border border-border sm:grid-cols-[8rem_minmax(0,1fr)_auto]"
             >
-              <div className="flex items-start gap-3">
-                {preview?.thumbnail && (
-                  <button
-                    type="button"
-                    disabled={!preview.video}
-                    aria-label={`Preview reel for ${auto.name}`}
-                    onClick={() =>
-                      preview.video &&
-                      setPlayingVideo({
-                        url: preview.video,
-                        postUrl: auto.postUrl,
-                      })
-                    }
-                    className="shrink-0"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={preview.thumbnail}
-                      width={44}
-                      height={44}
-                      loading="lazy"
-                      alt=""
-                      className="h-11 w-11 rounded-lg object-cover"
-                    />
-                  </button>
+              <button
+                type="button"
+                disabled={!preview?.video}
+                aria-label={`Preview reel for ${auto.name}`}
+                onClick={() =>
+                  preview?.video &&
+                  setPlayingVideo({ url: preview.video, postUrl: auto.postUrl })
+                }
+                className="relative min-h-full overflow-hidden bg-surface-hover disabled:cursor-default"
+              >
+                {preview?.thumbnail ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={preview.thumbnail}
+                    loading="lazy"
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="grid h-full place-items-center px-2 text-center text-xs text-muted">
+                    {auto.pendingNextReel ? "Next reel" : "No preview"}
+                  </span>
                 )}
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-semibold">
-                    <Link
-                      href={`/campaigns/${auto.id}`}
-                      className="block min-h-6 break-words hover:underline"
-                    >
-                      {auto.name}
-                    </Link>
-                  </h2>
-                  <p className="mt-1 break-words text-sm text-muted">
-                    @{auto.instagramAccount.username} ·{" "}
-                    {auto.isActive ? "Enabled" : "Paused"}
-                    {auto.pendingNextReel ? " · Waiting for next reel" : ""}
+              </button>
+              <div className="min-w-0 p-3 sm:p-4">
+                <h2 className="text-base font-semibold">
+                  <Link
+                    href={`/campaigns/${auto.id}`}
+                    className="block min-h-6 break-words hover:underline"
+                  >
+                    {auto.name}
+                  </Link>
+                </h2>
+                <p className="mt-1 break-words text-sm text-muted">
+                  @{auto.instagramAccount.username} ·{" "}
+                  {auto.isActive ? "Enabled" : "Paused"}
+                </p>
+                <p className="mt-2 line-clamp-2 text-sm text-muted">
+                  {auto.matchAnyPost
+                    ? "Any post or reel"
+                    : auto.pendingNextReel
+                      ? "Waiting for next reel"
+                      : "Specific reel"}
+                  {" · "}
+                  {auto.matchAnyWord
+                    ? "Any comment"
+                    : auto.keywords.join(", ") || "Any comment"}
+                </p>
+                {auto.goal && (
+                  <p className="mt-1 line-clamp-1 text-sm text-muted">
+                    {auto.goal}
                   </p>
+                )}
+                <div className="mt-3 grid grid-cols-3 gap-2 text-sm tabular-nums">
+                  <p>
+                    <strong className="block text-lg">
+                      {auto.analytics.sent.toLocaleString()}
+                    </strong>
+                    <span className="text-muted">Sent</span>
+                  </p>
+                  <p>
+                    <strong className="block text-lg">
+                      {auto.analytics.clicks.toLocaleString()}
+                    </strong>
+                    <span className="text-muted">
+                      Clicks · {auto.analytics.ctr}%
+                    </span>
+                  </p>
+                  <Link
+                    href={activityUrl}
+                    className={
+                      auto.analytics.failed ? "text-error" : "text-muted"
+                    }
+                  >
+                    <strong className="block text-lg">
+                      {auto.analytics.failed.toLocaleString()}
+                    </strong>
+                    <span className="underline">Failed</span>
+                  </Link>
                 </div>
+              </div>
+              <div className="flex min-w-0 flex-col border-l border-border p-2 sm:min-w-30 sm:p-3">
                 <button
                   type="button"
                   role="switch"
@@ -380,7 +421,7 @@ export default function CampaignsPage() {
                   aria-label={`Enable ${auto.name}`}
                   disabled={Boolean(busyId) || result.loading}
                   onClick={() => void toggleActive(auto)}
-                  className="flex h-11 w-12 shrink-0 items-center justify-center disabled:opacity-50"
+                  className="flex min-h-11 items-center justify-center disabled:opacity-50"
                 >
                   <span
                     className={`flex h-6 w-11 items-center rounded-full px-1 ${auto.isActive ? "justify-end bg-accent" : "justify-start bg-muted"}`}
@@ -388,91 +429,35 @@ export default function CampaignsPage() {
                     <span className="h-4 w-4 rounded-full bg-white" />
                   </span>
                 </button>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-3 text-sm tabular-nums">
-                <p>
-                  <strong className="block text-lg">
-                    {auto.analytics.sent.toLocaleString()}
-                  </strong>
-                  <span className="text-muted">Sent</span>
-                </p>
-                <p>
-                  <strong className="block text-lg">
-                    {auto.analytics.clicks.toLocaleString()}
-                  </strong>
-                  <span className="text-muted">
-                    Clicks · {auto.analytics.ctr}%
-                  </span>
-                </p>
                 <Link
-                  href={activityUrl}
-                  className={`min-h-11 ${auto.analytics.failed ? "text-error" : "text-muted"}`}
+                  href={`/campaigns/${auto.id}/edit`}
+                  className="inline-flex min-h-11 items-center justify-center text-sm underline"
                 >
-                  <strong className="block text-lg">
-                    {auto.analytics.failed.toLocaleString()}
-                  </strong>
-                  <span className="underline">Failed</span>
+                  Edit
                 </Link>
+                {auto.postUrl && (
+                  <button
+                    onClick={() => void copyReelUrl(auto)}
+                    className="min-h-11 text-xs underline"
+                  >
+                    {copiedId === auto.id ? "Copied" : "Copy URL"}
+                  </button>
+                )}
+                <button
+                  disabled={Boolean(busyId)}
+                  onClick={() => void duplicateAutomation(auto)}
+                  className="min-h-11 text-xs underline disabled:opacity-50"
+                >
+                  Duplicate
+                </button>
+                <button
+                  disabled={Boolean(busyId)}
+                  onClick={() => void deleteAutomation(auto.id)}
+                  className="min-h-11 text-xs text-error underline disabled:opacity-50"
+                >
+                  Delete
+                </button>
               </div>
-              <details className="mt-2 border-t border-border pt-1">
-                <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted">
-                  Details & actions
-                </summary>
-                <div className="space-y-3 pb-1">
-                  <p className="break-words text-sm">
-                    <span className="font-medium">Keywords:</span>{" "}
-                    {auto.keywords.join(", ") || "Any comment"}
-                  </p>
-                  <p className="whitespace-pre-wrap break-words text-sm text-muted">
-                    {auto.dmMessage}
-                  </p>
-                  {auto.trackedLinks.map((link) => (
-                    <a
-                      key={link.id}
-                      href={link.trackedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block break-all text-sm underline"
-                    >
-                      {link.trackedUrl}
-                    </a>
-                  ))}
-                  <p className="text-sm text-muted">
-                    {auto._count.dmLogs} runs · {auto.analytics.skipped} skipped
-                    {auto.requireFollow ? " · Follow gate" : ""}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/campaigns/${auto.id}/edit`}
-                      className="inline-flex min-h-11 items-center rounded-lg border border-border px-3 text-sm"
-                    >
-                      Edit
-                    </Link>
-                    {auto.postUrl && (
-                      <button
-                        onClick={() => void copyReelUrl(auto)}
-                        className="min-h-11 rounded-lg border border-border px-3 text-sm"
-                      >
-                        {copiedId === auto.id ? "Copied" : "Copy post URL"}
-                      </button>
-                    )}
-                    <button
-                      disabled={Boolean(busyId)}
-                      onClick={() => void duplicateAutomation(auto)}
-                      className="min-h-11 rounded-lg border border-border px-3 text-sm disabled:opacity-50"
-                    >
-                      Duplicate
-                    </button>
-                    <button
-                      disabled={Boolean(busyId)}
-                      onClick={() => void deleteAutomation(auto.id)}
-                      className="min-h-11 rounded-lg border border-error/30 px-3 text-sm text-error disabled:opacity-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </details>
             </article>
           );
         })}
