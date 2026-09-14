@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
       prisma.dmLog.groupBy({
         by: ["automationId"],
         where: { ...analyticsFilter, status: "SENT" },
-        _max: { dmSentAt: true },
+        _max: { dmSentAt: true, updatedAt: true },
       }),
     ]);
 
@@ -243,7 +243,7 @@ export async function GET(request: NextRequest) {
 
   for (const row of lastSentRows) {
     const item = analytics.get(row.automationId);
-    if (item) item.lastSentAt = row._max.dmSentAt;
+    if (item) item.lastSentAt = row._max.dmSentAt ?? row._max.updatedAt;
   }
 
   for (const automation of automationsWithReports) {
