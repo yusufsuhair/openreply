@@ -46,6 +46,7 @@ interface Campaign {
   reportShareEnabled: boolean;
   reportUrl: string | null;
   createdAt: string;
+  updatedAt: string;
   _count: { dmLogs: number };
   trackedLinks: Array<{
     id: string;
@@ -61,8 +62,27 @@ interface Campaign {
     failed: number;
     clicks: number;
     ctr: number;
+    lastSentAt: string | null;
     topKeywords: { keyword: string; count: number }[];
   };
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatLastSent(value: string | null) {
+  if (!value) return "No DM sent yet";
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export default function CampaignsPage() {
@@ -385,6 +405,13 @@ export default function CampaignsPage() {
                     {auto.goal}
                   </p>
                 )}
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                  {auto.requireFollow && <span>Follow gate</span>}
+                  {auto.publicReplyEnabled && <span>Public reply</span>}
+                  <span>
+                    Last sent: {formatLastSent(auto.analytics.lastSentAt)}
+                  </span>
+                </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-sm tabular-nums">
                   <p>
                     <strong className="block text-lg">
@@ -412,6 +439,10 @@ export default function CampaignsPage() {
                     <span className="underline">Failed</span>
                   </Link>
                 </div>
+                <p className="mt-2 text-xs text-muted">
+                  Created {formatDate(auto.createdAt)} · Updated{" "}
+                  {formatDate(auto.updatedAt)}
+                </p>
               </div>
               <div className="flex min-w-0 flex-col border-l border-border p-2 sm:min-w-30 sm:p-3">
                 <button

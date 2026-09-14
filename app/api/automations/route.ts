@@ -180,23 +180,29 @@ export async function GET(request: NextRequest) {
     automationId: { in: automations.map((a) => a.id) },
   };
 
-  const [statusCounts, clickCounts, keywordCounts] = await Promise.all([
-    prisma.dmLog.groupBy({
-      by: ["automationId", "status"],
-      where: analyticsFilter,
-      _count: { _all: true },
-    }),
-    prisma.linkClick.groupBy({
-      by: ["automationId"],
-      where: analyticsFilter,
-      _count: { _all: true },
-    }),
-    prisma.dmLog.groupBy({
-      by: ["automationId", "matchedKeyword"],
-      where: { ...analyticsFilter, matchedKeyword: { not: null } },
-      _count: { _all: true },
-    }),
-  ]);
+  const [statusCounts, clickCounts, keywordCounts, lastSentRows] =
+    await Promise.all([
+      prisma.dmLog.groupBy({
+        by: ["automationId", "status"],
+        where: analyticsFilter,
+        _count: { _all: true },
+      }),
+      prisma.linkClick.groupBy({
+        by: ["automationId"],
+        where: analyticsFilter,
+        _count: { _all: true },
+      }),
+      prisma.dmLog.groupBy({
+        by: ["automationId", "matchedKeyword"],
+        where: { ...analyticsFilter, matchedKeyword: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.dmLog.groupBy({
+        by: ["automationId"],
+        where: { ...analyticsFilter, status: "SENT" },
+        _max: { dmSentAt: true },
+      }),
+    ]);
 
   const analytics = new Map<
     string,
@@ -205,6 +211,7 @@ export async function GET(request: NextRequest) {
       skipped: number;
       failed: number;
       clicks: number;
+      lastSentAt: Date | null;
       topKeywords: { keyword: string; count: number }[];
     }
   >();
@@ -215,6 +222,7 @@ export async function GET(request: NextRequest) {
       skipped: 0,
       failed: 0,
       clicks: 0,
+      lastSentAt: null,
       topKeywords: [],
     });
   }
@@ -231,6 +239,11 @@ export async function GET(request: NextRequest) {
   for (const row of clickCounts) {
     const item = analytics.get(row.automationId);
     if (item) item.clicks = row._count._all;
+  }
+
+  for (const row of lastSentRows) {
+    const item = analytics.get(row.automationId);
+    if (item) item.lastSentAt = row._max.dmSentAt;
   }
 
   for (const automation of automationsWithReports) {
@@ -256,6 +269,7 @@ export async function GET(request: NextRequest) {
           skipped: 0,
           failed: 0,
           clicks: 0,
+          lastSentAt: null,
           topKeywords: [],
         };
 
