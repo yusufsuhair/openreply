@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/remembered-link";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { useAccountFilter, updateQuery } from "@/components/account-context";
 import {
@@ -115,7 +115,7 @@ export default function CampaignsPage() {
             >(
               `/api/instagram/posts?instagramAccountId=${encodeURIComponent(id)}&limit=50`,
               { signal: controller.signal },
-            ),
+            ).catch(() => []),
           ),
         );
         if (controller.signal.aborted) return;
@@ -253,7 +253,7 @@ export default function CampaignsPage() {
           New campaign
         </Link>
       </div>
-      <AccountHealth />
+      <AccountHealth compact />
       <div className="sticky top-0 z-10 space-y-3 border-b border-border bg-background py-3">
         <label className="block">
           <span className="sr-only">Search campaigns</span>
@@ -281,12 +281,6 @@ export default function CampaignsPage() {
               {label}
             </button>
           ))}
-          <Link
-            href="/campaigns/import"
-            className="ml-auto inline-flex min-h-11 items-center px-2 text-sm underline"
-          >
-            Import
-          </Link>
         </div>
       </div>
       <DataFeedback {...result} />
@@ -483,6 +477,12 @@ export default function CampaignsPage() {
           );
         })}
       </div>
+      <Link
+        href="/campaigns/import"
+        className="inline-flex min-h-11 items-center px-2 text-sm underline"
+      >
+        Import campaigns
+      </Link>
       <VideoDialog video={playingVideo} close={() => setPlayingVideo(null)} />
     </div>
   );

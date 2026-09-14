@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useCacheScope } from "@/components/account-context";
 
@@ -9,6 +10,7 @@ export default function RememberedLink(
 ) {
   const scope = useCacheScope();
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   return (
     <Link
       {...props}
@@ -19,10 +21,25 @@ export default function RememberedLink(
           const saved = sessionStorage.getItem(`${scope}:route:${path}`);
           if (saved && saved.startsWith(`${path}?`)) {
             event.preventDefault();
-            router.push(saved);
+            startTransition(() => router.push(saved));
           }
         } catch {}
       }}
-    />
+    >
+      {props.children}
+      <Pending pending={pending} />
+    </Link>
+  );
+}
+
+function Pending({ pending }: { pending: boolean }) {
+  const status = useLinkStatus();
+  return (
+    <span
+      aria-hidden="true"
+      className={pending || status.pending ? "ml-1" : "hidden"}
+    >
+      …
+    </span>
   );
 }
