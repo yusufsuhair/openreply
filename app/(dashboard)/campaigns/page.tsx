@@ -328,8 +328,13 @@ export default function CampaignsPage() {
         />
       )}
       {automations && (
-        <p className="text-sm text-muted">
-          {filtered.length} of {automations.length} campaigns · Lifetime totals
+        <p className="text-sm text-muted" aria-live="polite">
+          <span className="font-medium text-foreground">
+            Total: {automations.length} campaigns
+          </span>
+          {filtered.length !== automations.length &&
+            ` · Showing ${filtered.length}`}
+          {" · Lifetime totals"}
         </p>
       )}
       {automations?.length === 0 && (
