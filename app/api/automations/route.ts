@@ -319,10 +319,14 @@ export async function POST(request: NextRequest) {
     }),
     requestedInstagramAccountId
       ? prisma.instagramAccount.findFirst({
-          where: { id: requestedInstagramAccountId, workspaceId },
+          where: {
+            id: requestedInstagramAccountId,
+            workspaceId,
+            accessToken: { not: "" },
+          },
         })
       : prisma.instagramAccount.findFirst({
-          where: { workspaceId },
+          where: { workspaceId, accessToken: { not: "" } },
           orderBy: { connectedAt: "desc" },
         }),
   ]);

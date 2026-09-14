@@ -75,7 +75,7 @@ export default function SettingsPage() {
   }
 
   async function disconnectInstagram(instagramAccountId: string) {
-    if (!confirm("Disconnect Instagram? Campaigns for this account will stop sending DMs.")) {
+    if (!confirm("Disconnect Instagram? Campaigns will be preserved but turned off.")) {
       return;
     }
 

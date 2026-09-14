@@ -31,13 +31,12 @@ export async function getWorkspaceInstagramAccount(
 ) {
   if (instagramAccountId && instagramAccountId !== "all") {
     return prisma.instagramAccount.findFirst({
-      where: { id: instagramAccountId, workspaceId },
+      where: { id: instagramAccountId, workspaceId, accessToken: { not: "" } },
     });
   }
 
   return prisma.instagramAccount.findFirst({
-    where: { workspaceId },
+    where: { workspaceId, accessToken: { not: "" } },
     orderBy: { connectedAt: "desc" },
   });
 }
-

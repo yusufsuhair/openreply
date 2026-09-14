@@ -25,12 +25,37 @@ export async function POST(request: NextRequest) {
   const instagramAccountId =
     typeof body.instagramAccountId === "string" ? body.instagramAccountId : null;
 
-  await prisma.instagramAccount.deleteMany({
-    where: {
-      workspaceId: context.workspaceId,
-      ...(instagramAccountId ? { id: instagramAccountId } : {}),
-    },
-  });
+  if (!instagramAccountId) {
+    return NextResponse.json(
+      { success: false, error: "Instagram account ID is required" },
+      { status: 400 }
+    );
+  }
 
-  return NextResponse.json({ success: true });
+  const [account, campaigns] = await prisma.$transaction([
+    prisma.instagramAccount.updateMany({
+      where: { id: instagramAccountId, workspaceId: context.workspaceId },
+      data: {
+        accessToken: "",
+        tokenExpiresAt: null,
+        webhookSubscribed: false,
+      },
+    }),
+    prisma.automation.updateMany({
+      where: { instagramAccountId, workspaceId: context.workspaceId },
+      data: { isActive: false },
+    }),
+  ]);
+
+  if (account.count === 0) {
+    return NextResponse.json(
+      { success: false, error: "Instagram account not found" },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: { preservedCampaigns: campaigns.count },
+  });
 }
