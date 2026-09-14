@@ -6,15 +6,19 @@
  * Page title, mobile hamburger, and connection status.
  */
 
+import Link from "@/components/remembered-link";
 import { usePathname } from "next/navigation";
 
 const pageTitles: Record<string, string> = {
-  "/dashboard": "Dashboard",
+  "/dashboard": "Home",
+  "/overview": "Analytics",
+  "/inbox": "Inbox",
+  "/campaigns/import": "Import campaigns",
   "/campaigns": "Campaigns",
   "/campaigns/new": "New Campaign",
   "/automations": "Campaigns",
   "/automations/new": "New Campaign",
-  "/logs": "DM Logs",
+  "/logs": "Activity",
   "/settings": "Settings",
   "/diagnostics": "Diagnostics",
 };
@@ -31,7 +35,16 @@ export default function TopBar({
   instagramAccountCount,
 }: TopBarProps) {
   const pathname = usePathname();
-  const title = pageTitles[pathname] ?? "Dashboard";
+  const isCampaign =
+    /^\/campaigns\/[^/]+/.test(pathname) &&
+    !["/campaigns/new", "/campaigns/import"].includes(pathname);
+  const title =
+    pageTitles[pathname] ??
+    (isCampaign
+      ? pathname.endsWith("/edit")
+        ? "Edit campaign"
+        : "Campaign details"
+      : "OpenReply");
 
   return (
     <header
@@ -47,12 +60,24 @@ export default function TopBar({
       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
         <button
           onClick={onMenuClick}
-          className="lg:hidden shrink-0 px-2.5 py-1.5 rounded border border-border text-sm text-muted hover:text-foreground"
-          aria-label="Toggle sidebar"
+          className="lg:hidden min-h-11 shrink-0 px-2.5 py-1.5 rounded border border-border text-sm text-muted hover:text-foreground"
+          aria-label="Open navigation"
         >
           Menu
         </button>
-        <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
+        <div className="min-w-0">
+          {isCampaign && (
+            <Link
+              href="/campaigns"
+              className="inline-flex min-h-8 items-center text-sm text-muted underline underline-offset-4"
+            >
+              Back to campaigns
+            </Link>
+          )}
+          <h1 className="truncate text-base font-semibold sm:text-lg">
+            {title}
+          </h1>
+        </div>
       </div>
 
       {instagramAccountCount > 0 ? (

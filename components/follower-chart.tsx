@@ -31,7 +31,7 @@ export interface FollowerChartPoint {
 
 // Colors read against the light chart surface (#ffffff): the accent line clears
 // 3:1 contrast and grid/axis text match the muted/border tokens. See globals.css.
-const SERIES_COLOR = "#f97316";
+const SERIES_COLOR = "var(--color-accent)";
 const GRID_COLOR = "#e4e4e7";
 const AXIS_TEXT = "#71717a";
 
@@ -92,7 +92,9 @@ export default function FollowerChart({
   // Net change across the whole visible window, shown once in the header rather
   // than labelling every point.
   const net =
-    data.length > 1 ? data[data.length - 1].followers - data[0].followers : null;
+    data.length > 1
+      ? data[data.length - 1].followers - data[0].followers
+      : null;
 
   return (
     <div className="panel rounded p-4 sm:p-6">
@@ -150,7 +152,10 @@ export default function FollowerChart({
             </thead>
             <tbody>
               {[...data].reverse().map((p) => (
-                <tr key={p.date} className="border-b border-border last:border-0">
+                <tr
+                  key={p.date}
+                  className="border-b border-border last:border-0"
+                >
                   <td className="py-2 pr-4 text-foreground">
                     {formatDay(p.date)}
                   </td>
@@ -205,7 +210,12 @@ export default function FollowerChart({
                 stroke={SERIES_COLOR}
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: SERIES_COLOR, stroke: "#ffffff", strokeWidth: 2 }}
+                activeDot={{
+                  r: 4,
+                  fill: SERIES_COLOR,
+                  stroke: "#ffffff",
+                  strokeWidth: 2,
+                }}
                 isAnimationActive={false}
               />
             </LineChart>

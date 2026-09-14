@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
+import { getReadCache } from "@/lib/ops/read-cache";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
@@ -6,6 +8,7 @@ import {
   getAllUserMedia,
   getMediaInsights,
   PermissionError,
+  TokenExpiredError,
   type InstagramMedia,
 } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
@@ -29,7 +32,7 @@ const INSIGHTS_CONCURRENCY = 8;
 async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T, index: number) => Promise<R>
+  fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let cursor = 0;
@@ -41,9 +44,8 @@ async function mapWithConcurrency<T, R>(
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    () => worker()
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
+    worker(),
   );
   await Promise.all(workers);
   return results;
@@ -65,6 +67,9 @@ export interface OverviewPost {
 }
 
 export interface OverviewResponse {
+  updatedAt?: string;
+  refreshError?: string;
+  refreshing?: boolean;
   account: { id: string; username: string };
   accounts: Array<{ id: string; username: string }>;
   requestedCount: "all" | number;
@@ -91,9 +96,7 @@ export interface OverviewResponse {
 }
 
 function isVideoLike(media: InstagramMedia): boolean {
-  return (
-    media.media_product_type === "REELS" || media.media_type === "VIDEO"
-  );
+  return media.media_product_type === "REELS" || media.media_type === "VIDEO";
 }
 
 export async function GET(request: NextRequest) {
@@ -101,13 +104,13 @@ export async function GET(request: NextRequest) {
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
   const account = await getWorkspaceInstagramAccount(
     workspaceId,
-    request.nextUrl.searchParams.get("instagramAccountId")
+    request.nextUrl.searchParams.get("instagramAccountId"),
   );
 
   if (!account) {
@@ -117,22 +120,38 @@ export async function GET(request: NextRequest) {
         error:
           "Instagram account not connected. Please connect your account first.",
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  try {
-    const accessToken = decryptToken(account.accessToken);
+  const cache = getReadCache();
+  const tokenKey = createHash("sha256")
+    .update(account.accessToken)
+    .digest("hex")
+    .slice(0, 20);
+  const requestedRange = request.nextUrl.searchParams.get("count");
+  const normalizedRange =
+    requestedRange === "all"
+      ? "all"
+      : String(
+          Math.min(
+            500,
+            Math.max(1, Number.parseInt(requestedRange ?? "25", 10) || 25),
+          ),
+        );
+  const cacheKey = `overview:${workspaceId}:${account.id}:${tokenKey}:${normalizedRange}`;
+  async function buildOverview(): Promise<OverviewResponse> {
+    const accessToken = decryptToken(account!.accessToken);
 
     // `count` is either "all" or a positive integer (last N posts).
-    const countParam = request.nextUrl.searchParams.get("count");
+    const countParam = normalizedRange;
     const isAll = countParam === "all";
     const parsedCount = countParam ? Number.parseInt(countParam, 10) : NaN;
     const requestedCount: "all" | number = isAll
       ? "all"
       : Number.isFinite(parsedCount)
         ? Math.max(parsedCount, 1)
-        : 50;
+        : 25;
 
     const target = isAll
       ? MAX_POSTS
@@ -160,10 +179,11 @@ export async function GET(request: NextRequest) {
           insightsAvailable = true;
           return data;
         } catch (err) {
+          if (err instanceof TokenExpiredError) throw err;
           if (err instanceof PermissionError) permissionDenied = true;
           return null;
         }
-      }
+      },
     );
 
     const posts: OverviewPost[] = media.map((m, i) => {
@@ -195,7 +215,8 @@ export async function GET(request: NextRequest) {
         acc.comments += p.comments;
         acc.saved += p.saved ?? 0;
         acc.shares += p.shares ?? 0;
-        acc.interactions += p.likes + p.comments + (p.saved ?? 0) + (p.shares ?? 0);
+        acc.interactions +=
+          p.likes + p.comments + (p.saved ?? 0) + (p.shares ?? 0);
         return acc;
       },
       {
@@ -207,11 +228,11 @@ export async function GET(request: NextRequest) {
         saved: 0,
         shares: 0,
         interactions: 0,
-      }
+      },
     );
 
     const accounts = await prisma.instagramAccount.findMany({
-      where: { workspaceId, accessToken: { not: "" } },
+      where: { workspaceId: workspaceId!, accessToken: { not: "" } },
       orderBy: { connectedAt: "desc" },
       select: { id: true, username: true },
     });
@@ -223,19 +244,20 @@ export async function GET(request: NextRequest) {
     let followerHistory: FollowerHistoryPoint[] = [];
     try {
       followers = await ensureFollowerHistory(
-        { id: account.id, instagramId: account.instagramId },
-        accessToken
+        { id: account!.id, instagramId: account!.instagramId },
+        accessToken,
       );
-      followerHistory = await getFollowerHistory(account.id);
+      followerHistory = await getFollowerHistory(account!.id);
     } catch (err) {
       console.warn(
         "[Instagram Overview] Follower history unavailable:",
-        err instanceof Error ? err.message : err
+        err instanceof Error ? err.message : err,
       );
     }
 
     const data: OverviewResponse = {
-      account: { id: account.id, username: account.username },
+      updatedAt: new Date().toISOString(),
+      account: { id: account!.id, username: account!.username },
       accounts,
       requestedCount,
       truncated,
@@ -246,12 +268,72 @@ export async function GET(request: NextRequest) {
       posts,
     };
 
-    return NextResponse.json({ success: true, data });
-  } catch (err) {
-    console.error("[Instagram Overview] Error:", err);
+    return data;
+  }
+  try {
+    const raw = await cache.get(cacheKey).catch(() => null);
+    let cached: OverviewResponse | null = null;
+    try {
+      cached = raw ? JSON.parse(raw) : null;
+    } catch {}
+    if (cached?.updatedAt) {
+      const stale = Date.now() - Date.parse(cached.updatedAt) > 5 * 60000;
+      if (stale) {
+        after(async () => {
+          const acquired = await cache
+            .set(`${cacheKey}:lock`, "1", "EX", 60, "NX")
+            .catch(() => null);
+          if (!acquired) return;
+          try {
+            const data = await buildOverview();
+            await cache.set(cacheKey, JSON.stringify(data), "EX", 86400);
+          } catch (error) {
+            await cache
+              .set(
+                cacheKey,
+                JSON.stringify({
+                  ...cached,
+                  refreshError:
+                    error instanceof TokenExpiredError
+                      ? "Instagram access was revoked. Reconnect in Settings."
+                      : "Instagram refresh failed. Showing the last saved snapshot.",
+                }),
+                "EX",
+                86400,
+              )
+              .catch(() => {});
+          } finally {
+            await cache.del(`${cacheKey}:lock`).catch(() => {});
+          }
+        });
+      }
+      return NextResponse.json(
+        {
+          success: true,
+          data: { ...cached, refreshing: stale && !cached.refreshError },
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const data = await buildOverview();
+    await cache
+      .set(cacheKey, JSON.stringify(data), "EX", 86400)
+      .catch(() => {});
     return NextResponse.json(
-      { success: false, error: "Failed to load Instagram overview" },
-      { status: 500 }
+      { success: true, data },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (error) {
+    console.error("[Instagram Overview] Error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error instanceof TokenExpiredError
+            ? "Instagram access was revoked. Reconnect in Settings."
+            : "Unable to load Instagram analytics. Please try again.",
+      },
+      { status: error instanceof TokenExpiredError ? 409 : 502 },
     );
   }
 }

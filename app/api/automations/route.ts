@@ -39,7 +39,13 @@ const createAutomationSchema = z
     followUpMessage: z.string().max(1000).optional().nullable(),
     // Minutes to wait before the follow-up. Capped at 24h so it stays inside
     // Instagram's messaging window.
-    followUpDelayMinutes: z.number().int().min(0).max(1440).optional().default(0),
+    followUpDelayMinutes: z
+      .number()
+      .int()
+      .min(0)
+      .max(1440)
+      .optional()
+      .default(0),
     publicReplyEnabled: z.boolean().optional().default(false),
     publicReplyMessage: z.string().max(1000).optional().nullable(),
     publicReplyMessages: z
@@ -62,10 +68,10 @@ const createAutomationSchema = z
     wholeWordMatch: z.boolean().optional().default(true),
   })
   // A campaign must target a specific post, any post, or the next reel.
-  .refine(
-    (d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId),
-    { message: "Choose which post(s) trigger the campaign", path: ["postId"] }
-  )
+  .refine((d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId), {
+    message: "Choose which post(s) trigger the campaign",
+    path: ["postId"],
+  })
   // And it must match either specific words or any word.
   .refine((d) => d.matchAnyWord || d.keywords.length >= 1, {
     message: "Add at least one keyword, or match any word",
@@ -77,7 +83,10 @@ const createAutomationSchema = z
       !d.openingDmEnabled ||
       (Boolean(d.openingDmMessage?.trim()) &&
         Boolean(d.openingDmButtonLabel?.trim())),
-    { message: "Opening DM needs a message and a button label", path: ["openingDmMessage"] }
+    {
+      message: "Opening DM needs a message and a button label",
+      path: ["openingDmMessage"],
+    },
   );
 
 const updateAutomationSchema = z.object({
@@ -126,7 +135,7 @@ export async function GET(request: NextRequest) {
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
   const instagramAccountId =
@@ -136,8 +145,9 @@ export async function GET(request: NextRequest) {
       ? { instagramAccountId }
       : {};
 
+  const id = request.nextUrl.searchParams.get("id");
   const automations = await prisma.automation.findMany({
-    where: { workspaceId, ...accountFilter },
+    where: { workspaceId, ...accountFilter, ...(id ? { id } : {}) },
     include: {
       instagramAccount: {
         select: { username: true, instagramId: true },
@@ -159,37 +169,31 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
-  const automationsWithReports = await Promise.all(
-    automations.map(async (automation) => {
-      if (automation.reportShareSlug) return automation;
-
-      const updated = await prisma.automation.update({
-        where: { id: automation.id },
-        data: { reportShareSlug: generateReportShareSlug() },
-        select: { reportShareSlug: true },
-      });
-
-      return {
-        ...automation,
-        reportShareSlug: updated.reportShareSlug,
-      };
-    })
-  );
+  if (id && automations.length === 0)
+    return NextResponse.json(
+      { success: false, error: "Campaign not found" },
+      { status: 404 },
+    );
+  const automationsWithReports = automations;
+  const analyticsFilter = {
+    workspaceId,
+    automationId: { in: automations.map((a) => a.id) },
+  };
 
   const [statusCounts, clickCounts, keywordCounts] = await Promise.all([
     prisma.dmLog.groupBy({
       by: ["automationId", "status"],
-      where: { workspaceId },
+      where: analyticsFilter,
       _count: { _all: true },
     }),
     prisma.linkClick.groupBy({
       by: ["automationId"],
-      where: { workspaceId },
+      where: analyticsFilter,
       _count: { _all: true },
     }),
     prisma.dmLog.groupBy({
       by: ["automationId", "matchedKeyword"],
-      where: { workspaceId, matchedKeyword: { not: null } },
+      where: { ...analyticsFilter, matchedKeyword: { not: null } },
       _count: { _all: true },
     }),
   ]);
@@ -239,39 +243,39 @@ export async function GET(request: NextRequest) {
           matchedKeyword: row.matchedKeyword,
           _count: row._count._all,
         })),
-      3
+      3,
     );
   }
 
   return NextResponse.json(
     {
-    success: true,
-    data: automationsWithReports.map((automation) => {
-      const item = analytics.get(automation.id) ?? {
-        sent: 0,
-        skipped: 0,
-        failed: 0,
-        clicks: 0,
-        topKeywords: [],
-      };
+      success: true,
+      data: automationsWithReports.map((automation) => {
+        const item = analytics.get(automation.id) ?? {
+          sent: 0,
+          skipped: 0,
+          failed: 0,
+          clicks: 0,
+          topKeywords: [],
+        };
 
-      return {
-        ...automation,
-        trackedLinks: automation.trackedLinks.map((link) => ({
-          ...link,
-          trackedUrl: buildTrackedUrl(link.slug),
-        })),
-        reportUrl: automation.reportShareSlug
-          ? buildReportUrl(automation.reportShareSlug)
-          : null,
-        analytics: {
-          ...item,
-          ctr: calculateCtr(item.clicks, item.sent),
-        },
-      };
-    }),
+        return {
+          ...automation,
+          trackedLinks: automation.trackedLinks.map((link) => ({
+            ...link,
+            trackedUrl: buildTrackedUrl(link.slug),
+          })),
+          reportUrl: automation.reportShareSlug
+            ? buildReportUrl(automation.reportShareSlug)
+            : null,
+          analytics: {
+            ...item,
+            ctr: calculateCtr(item.clicks, item.sent),
+          },
+        };
+      }),
     },
-    { headers: { "Cache-Control": "no-store" } }
+    { headers: { "Cache-Control": "no-store" } },
   );
 }
 
@@ -280,14 +284,14 @@ export async function POST(request: NextRequest) {
   if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
       { success: false, error: "Only owners and admins can create campaigns" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -303,7 +307,7 @@ export async function POST(request: NextRequest) {
         error: "Invalid input",
         details: parsed.error.flatten(),
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -334,19 +338,22 @@ export async function POST(request: NextRequest) {
   if (!workspace) {
     return NextResponse.json(
       { success: false, error: "Workspace not found" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
   if (!instagramAccount) {
     return NextResponse.json(
       { success: false, error: "Connect Instagram before creating campaigns" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  const { trackedDestinationUrl, secondaryDestinationUrl, secondaryButtonLabel } =
-    parsed.data;
+  const {
+    trackedDestinationUrl,
+    secondaryDestinationUrl,
+    secondaryButtonLabel,
+  } = parsed.data;
 
   // The primary link's button title comes from `linkButtonLabel`; the second
   // link stores its own button title in the tracked link's `label` field.
@@ -427,7 +434,7 @@ export async function POST(request: NextRequest) {
         ? publicReplyList
         : [],
       publicReplyMessage: parsed.data.publicReplyEnabled
-        ? publicReplyList[0] ?? parsed.data.publicReplyMessage ?? null
+        ? (publicReplyList[0] ?? parsed.data.publicReplyMessage ?? null)
         : null,
       isActive: parsed.data.isActive,
       wholeWordMatch: parsed.data.wholeWordMatch,
@@ -445,7 +452,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(
     { success: true, data: automation },
-    { status: 201 }
+    { status: 201 },
   );
 }
 
@@ -454,14 +461,14 @@ export async function PATCH(request: NextRequest) {
   if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
       { success: false, error: "Only owners and admins can update campaigns" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -471,7 +478,7 @@ export async function PATCH(request: NextRequest) {
   if (!automationId) {
     return NextResponse.json(
       { success: false, error: "Missing campaign ID" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -485,7 +492,7 @@ export async function PATCH(request: NextRequest) {
         error: "Invalid input",
         details: parsed.error.flatten(),
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -496,7 +503,7 @@ export async function PATCH(request: NextRequest) {
   if (!existing) {
     return NextResponse.json(
       { success: false, error: "Campaign not found" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
@@ -523,7 +530,10 @@ export async function PATCH(request: NextRequest) {
     automationData.followUpDelayMinutes = 0;
   }
   // Any-post / next-reel campaigns carry no specific post.
-  if (automationData.matchAnyPost === true || automationData.pendingNextReel === true) {
+  if (
+    automationData.matchAnyPost === true ||
+    automationData.pendingNextReel === true
+  ) {
     automationData.postId = null;
     automationData.postUrl = null;
   }
@@ -578,7 +588,10 @@ export async function PATCH(request: NextRequest) {
   // Update, create, or clear the campaign's second tracked link. It is always
   // the link at index [1] (ordered by createdAt), and its `label` holds the
   // second button's title.
-  if (secondaryDestinationUrl !== undefined && secondaryDestinationUrl !== null) {
+  if (
+    secondaryDestinationUrl !== undefined &&
+    secondaryDestinationUrl !== null
+  ) {
     const links = await prisma.trackedLink.findMany({
       where: { automationId },
       orderBy: { createdAt: "asc" },
@@ -593,7 +606,10 @@ export async function PATCH(request: NextRequest) {
     } else if (secondaryLink) {
       await prisma.trackedLink.update({
         where: { id: secondaryLink.id },
-        data: { destinationUrl: secondaryDestinationUrl, label: secondaryLabel },
+        data: {
+          destinationUrl: secondaryDestinationUrl,
+          label: secondaryLabel,
+        },
       });
     } else {
       await prisma.trackedLink.create({
@@ -616,14 +632,14 @@ export async function DELETE(request: NextRequest) {
   if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
       { success: false, error: "Only owners and admins can delete campaigns" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -633,7 +649,7 @@ export async function DELETE(request: NextRequest) {
   if (!automationId) {
     return NextResponse.json(
       { success: false, error: "Missing campaign ID" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -644,7 +660,7 @@ export async function DELETE(request: NextRequest) {
   if (!existing) {
     return NextResponse.json(
       { success: false, error: "Campaign not found" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 

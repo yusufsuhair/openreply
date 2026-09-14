@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import AccountHealth from "@/components/account-health";
+import { invalidateApiCache, requestData } from "@/lib/use-api-data";
 import { Suspense, useEffect, useState } from "react";
 import type { AccountOption } from "@/components/account-select";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
@@ -48,7 +51,7 @@ interface WorkspaceMembersData {
 export default function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [membersData, setMembersData] = useState<WorkspaceMembersData | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,17 +78,29 @@ export default function SettingsPage() {
   }
 
   async function disconnectInstagram(instagramAccountId: string) {
-    if (!confirm("Disconnect Instagram? Campaigns will be preserved but turned off.")) {
+    if (
+      !confirm(
+        "Disconnect Instagram? Campaigns will be preserved but turned off.",
+      )
+    ) {
       return;
     }
 
     setBusy(`disconnect:${instagramAccountId}`);
-    await fetch("/api/instagram/disconnect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instagramAccountId }),
-    });
-    window.location.reload();
+    try {
+      await requestData("/api/instagram/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instagramAccountId }),
+      });
+      invalidateApiCache();
+      window.location.reload();
+    } catch (error) {
+      setMemberError(
+        error instanceof Error ? error.message : "Could not disconnect",
+      );
+      setBusy(null);
+    }
   }
 
   async function inviteMember(event: React.FormEvent) {
@@ -129,6 +144,13 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
+      <AccountHealth />
+      <Link
+        href="/diagnostics"
+        className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
+      >
+        System diagnostics
+      </Link>
       {/* Surfaces the ?instagram= code the OAuth routes redirect back with.
           Needs a Suspense boundary: useSearchParams in a prerendered client
           page fails the production build without one. */}
@@ -191,7 +213,10 @@ export default function SettingsPage() {
                     {account.tokenExpiresAt
                       ? new Date(account.tokenExpiresAt).toLocaleDateString()
                       : "not available"}{" "}
-                    · {account.webhookSubscribed ? "Webhook ready" : "Webhook pending"}
+                    ·{" "}
+                    {account.webhookSubscribed
+                      ? "Webhook ready"
+                      : "Webhook pending"}
                   </p>
                 </div>
                 <button
@@ -213,7 +238,9 @@ export default function SettingsPage() {
             href="/api/instagram/connect"
             className="px-4 py-2 rounded text-sm font-medium transition-colors bg-accent text-white hover:bg-accent-hover"
           >
-            {accounts.length > 0 ? "Connect another account" : "Connect Instagram"}
+            {accounts.length > 0
+              ? "Connect another account"
+              : "Connect Instagram"}
           </a>
         </div>
       </section>
@@ -262,7 +289,9 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        void navigator.clipboard?.writeText(invitation.inviteUrl)
+                        void navigator.clipboard?.writeText(
+                          invitation.inviteUrl,
+                        )
                       }
                       className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border-hover hover:text-foreground"
                     >

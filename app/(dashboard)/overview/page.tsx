@@ -8,7 +8,12 @@
  * the insights permission); likes and comments are always available.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useAccountFilter, updateQuery } from "@/components/account-context";
+import { useApiData } from "@/lib/use-api-data";
+import DataFeedback from "@/components/data-feedback";
 import AccountSelect from "@/components/account-select";
 import StatCard from "@/components/stat-card";
 import FollowerChart from "@/components/follower-chart";
@@ -34,230 +39,251 @@ const COUNT_OPTIONS = [
 ];
 
 export default function OverviewPage() {
-  const [data, setData] = useState<OverviewResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState("all");
-  const [count, setCount] = useState("50");
-
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (selectedAccountId !== "all") {
-      params.set("instagramAccountId", selectedAccountId);
-    }
-    params.set("count", count);
-
-    fetch(`/api/instagram/overview?${params}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success) {
-          setData(res.data);
-          setError(null);
-        } else {
-          setError(res.error ?? "Failed to load overview");
-        }
-      })
-      .catch(() => setError("Failed to load overview"))
-      .finally(() => setLoading(false));
-  }, [selectedAccountId, count]);
-
-  function handleAccountChange(accountId: string) {
-    setLoading(true);
-    setSelectedAccountId(accountId);
+  const selection = useAccountFilter();
+  const params = useSearchParams();
+  const accountResult = useApiData<{
+    instagramAccounts: { id: string; username: string; instagramId: string }[];
+  }>("/api/instagram/accounts");
+  const accounts = accountResult.data?.instagramAccounts ?? [];
+  const accountId = accounts.some((a) => a.id === selection.account)
+    ? selection.account
+    : accounts[0]?.id;
+  const count = COUNT_OPTIONS.some((o) => o.value === params.get("count"))
+    ? params.get("count")!
+    : "25";
+  const result = useApiData<OverviewResponse>(
+    selection.ready && accountId
+      ? `/api/instagram/overview?instagramAccountId=${encodeURIComponent(accountId)}&count=${count}`
+      : null,
+    30000,
+  );
+  const data = result.data;
+  const [visible, setVisible] = useState(10);
+  const posts = data?.posts ?? [];
+  function changeAccount(id: string) {
+    selection.select(id);
+    setVisible(10);
   }
-
-  function handleCountChange(next: string) {
-    setLoading(true);
-    setCount(next);
-  }
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="panel rounded p-4 h-24 sm:p-5">
-            <div className="h-4 w-16 bg-zinc-200 rounded" />
-            <div className="mt-3 h-6 w-20 bg-zinc-200/60 rounded" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="panel rounded p-8 text-center">
-        <p className="text-sm text-error">{error}</p>
-        {error.includes("connect") && (
-          <a
-            href="/api/instagram/connect"
-            className="mt-4 inline-block text-sm text-accent hover:underline"
-          >
-            Connect Instagram
-          </a>
-        )}
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const { totals, posts, accounts, insightsAvailable, followers, followerHistory } =
-    data;
-
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-foreground">Overview</h1>
-          <p className="text-sm text-muted mt-1">
-            {data.requestedCount === "all" ? "All-time" : "Recent"} —{" "}
-            {totals.posts} post{totals.posts === 1 ? "" : "s"} from @
-            {data.account.username}
-            {data.truncated ? ` (capped at ${totals.posts})` : ""}
-          </p>
-          {followers !== null && (
-            // Kept out of the tile row below: that row sums the selected posts,
-            // whereas this is a current account-level total.
-            <p className="mt-1 text-sm text-muted">
-              {followers.toLocaleString()} followers
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-          <label className="flex flex-col gap-2 text-sm">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Range
-            </span>
-            <select
-              value={count}
-              onChange={(e) => handleCountChange(e.target.value)}
-              className="border-0 bg-transparent py-2 pr-1 text-sm text-foreground outline-none"
-            >
-              {COUNT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {accounts.length > 1 && (
-            <AccountSelect
-              accounts={accounts.map((a) => ({
-                id: a.id,
-                username: a.username,
-                instagramId: a.id,
-              }))}
-              value={selectedAccountId}
-              onChange={handleAccountChange}
-            />
-          )}
-        </div>
-      </div>
-
-      {!insightsAvailable && (
-        <div className="panel rounded p-4 border border-border">
-          <p className="text-sm text-foreground">
-            Views, reach, saved and shares need the insights permission.
-          </p>
-          <p className="text-sm text-muted mt-1">
-            Reconnect your account to grant it — likes and comments are shown in
-            the meantime.
-          </p>
-          <a
-            href="/api/instagram/connect"
-            className="mt-3 inline-block text-sm text-accent hover:underline"
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <AccountSelect
+          accounts={accounts}
+          includeAll={false}
+          value={accountId ?? ""}
+          onChange={changeAccount}
+        />
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Post range</span>
+          <select
+            value={count}
+            onChange={(event) => {
+              updateQuery({ count: event.target.value });
+              setVisible(10);
+            }}
+            className="min-h-11 rounded-lg border border-border bg-background px-3"
           >
-            Reconnect Instagram
-          </a>
+            {COUNT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {accountResult.error && <DataFeedback {...accountResult} />}
+      {accountResult.data && !accounts.length ? (
+        <div className="panel rounded-xl p-5">
+          <p>Connect Instagram to view analytics.</p>
+          <Link
+            href="/settings"
+            className="inline-flex min-h-11 items-center underline"
+          >
+            Open Settings
+          </Link>
         </div>
+      ) : (
+        <DataFeedback
+          {...result}
+          updatedAt={
+            data?.updatedAt ? Date.parse(data.updatedAt) : result.updatedAt
+          }
+          error={
+            result.error ||
+            (data?.refreshError ? new Error(data.refreshError) : null)
+          }
+        />
       )}
-
-      {/* Aggregate totals */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <StatCard label="Views" value={formatNumber(totals.views)} />
-        <StatCard label="Reach" value={formatNumber(totals.reach)} />
-        <StatCard label="Likes" value={formatNumber(totals.likes)} />
-        <StatCard label="Comments" value={formatNumber(totals.comments)} />
-        <StatCard label="Saved" value={formatNumber(totals.saved)} />
-        <StatCard label="Shares" value={formatNumber(totals.shares)} />
-      </div>
-
-      {/* Follower trend — account-level, independent of the post range */}
-      <FollowerChart data={followerHistory} followers={followers} />
-
-      {/* Per-post table */}
-      <div className="panel rounded p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Posts</h2>
-        {posts.length === 0 ? (
-          <p className="text-sm text-muted py-8 text-center">No posts found</p>
-        ) : (
-          // Eight metric columns can't compress into a phone; let the table keep
-          // its natural width and scroll inside the panel instead.
-          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500 border-b border-border">
-                  <th className="py-2 pr-4 font-medium">Post</th>
-                  <th className="py-2 px-3 font-medium text-right">Views</th>
-                  <th className="py-2 px-3 font-medium text-right">Reach</th>
-                  <th className="py-2 px-3 font-medium text-right">Likes</th>
-                  <th className="py-2 px-3 font-medium text-right">Comments</th>
-                  <th className="py-2 px-3 font-medium text-right">Saved</th>
-                  <th className="py-2 px-3 font-medium text-right">Shares</th>
-                  <th className="py-2 pl-3 font-medium text-right">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {posts.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="py-3 pr-4 max-w-xs">
-                      {p.permalink ? (
-                        <a
-                          href={p.permalink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-foreground hover:text-accent truncate block"
-                        >
-                          {p.caption || `${p.mediaType} post`}
-                        </a>
-                      ) : (
-                        <span className="text-foreground truncate block">
-                          {p.caption || `${p.mediaType} post`}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.views)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.reach)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.likes)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.comments)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.saved)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-muted">
-                      {formatNumber(p.shares)}
-                    </td>
-                    <td className="py-3 pl-3 text-right text-zinc-500">
-                      {formatDate(p.timestamp)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {(result.error?.message.includes("Reconnect") ||
+        data?.refreshError?.includes("Reconnect")) && (
+        <Link
+          href="/settings"
+          className="inline-flex min-h-11 items-center underline"
+        >
+          Reconnect Instagram
+        </Link>
+      )}
+      {!data && result.loading && accountId && (
+        <div
+          role="status"
+          className="panel h-28 rounded-xl"
+          aria-label="Loading analytics"
+        />
+      )}
+      {data && (
+        <>
+          <p className="text-sm text-muted">
+            {posts.length} posts from @{data.account.username}
+            {data.truncated ? " (limited to 500 posts)" : ""}
+            {data.refreshing ? " · Updating Instagram snapshot…" : ""}
+          </p>
+          {!data.insightsAvailable && (
+            <div className="panel rounded-xl p-4">
+              <p className="text-sm">
+                Some insights are unavailable. Likes and comments are still
+                shown.
+              </p>
+              <Link
+                href="/settings"
+                className="inline-flex min-h-11 items-center text-sm underline"
+              >
+                Check Instagram permissions
+              </Link>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <StatCard label="Views" value={formatNumber(data.totals.views)} />
+            <StatCard label="Reach" value={formatNumber(data.totals.reach)} />
+            <StatCard label="Likes" value={formatNumber(data.totals.likes)} />
+            <StatCard
+              label="Comments"
+              value={formatNumber(data.totals.comments)}
+            />
+            <StatCard label="Saved" value={formatNumber(data.totals.saved)} />
+            <StatCard label="Shares" value={formatNumber(data.totals.shares)} />
           </div>
-        )}
-      </div>
+          <FollowerChart
+            data={data.followerHistory}
+            followers={data.followers}
+          />
+          <section aria-label="Post performance" className="space-y-3">
+            <h2 className="text-lg font-semibold">Posts</h2>
+            {posts.length === 0 && (
+              <p className="text-muted">No posts found.</p>
+            )}
+            <div className="space-y-3 md:hidden">
+              {posts.slice(0, visible).map((post) => (
+                <article
+                  key={post.id}
+                  className="rounded-xl border border-border p-4"
+                >
+                  <p className="mb-2 text-sm text-muted">
+                    {formatDate(post.timestamp)} · {post.mediaType}
+                  </p>
+                  {post.permalink ? (
+                    <a
+                      href={post.permalink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block break-words text-base font-medium underline underline-offset-4"
+                    >
+                      {post.caption || "Open post"}
+                    </a>
+                  ) : (
+                    <p>{post.caption || "Post"}</p>
+                  )}
+                  <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                    {[
+                      ["Views", post.views],
+                      ["Reach", post.reach],
+                      ["Comments", post.comments],
+                      ["Likes", post.likes],
+                      ["Saved", post.saved],
+                      ["Shares", post.shares],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt className="text-muted">{label}</dt>
+                        <dd className="font-semibold tabular-nums">
+                          {formatNumber(value as number | null)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="p-3">Post</th>
+                    {[
+                      "Views",
+                      "Reach",
+                      "Likes",
+                      "Comments",
+                      "Saved",
+                      "Shares",
+                      "Date",
+                    ].map((label) => (
+                      <th key={label} className="p-3 text-right">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {posts.slice(0, visible).map((post) => (
+                    <tr
+                      key={post.id}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="max-w-xs p-3">
+                        {post.permalink ? (
+                          <a
+                            href={post.permalink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="line-clamp-2 underline"
+                          >
+                            {post.caption || "Open post"}
+                          </a>
+                        ) : (
+                          post.caption
+                        )}
+                      </td>
+                      {[
+                        post.views,
+                        post.reach,
+                        post.likes,
+                        post.comments,
+                        post.saved,
+                        post.shares,
+                      ].map((value, i) => (
+                        <td key={i} className="p-3 text-right tabular-nums">
+                          {formatNumber(value)}
+                        </td>
+                      ))}
+                      <td className="whitespace-nowrap p-3 text-right">
+                        {formatDate(post.timestamp)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {visible < posts.length && (
+              <button
+                onClick={() => setVisible((n) => n + 10)}
+                className="min-h-11 w-full rounded-lg border border-border px-4 text-sm"
+              >
+                Show 10 more posts ({Math.min(visible, posts.length)} of{" "}
+                {posts.length})
+              </button>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
+import { useAccountFilter } from "@/components/account-context";
 import { readCache, writeCache } from "@/lib/client-cache";
 import type { ConversationListItem } from "@/app/api/instagram/conversations/route";
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
@@ -37,14 +38,14 @@ function formatTime(iso: string | null): string {
 
 export default function InboxPage() {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
-  // Seed from the last-used account so a revisit can paint the cached
-  // conversation list immediately, before the account list even loads.
-  const [selectedAccountId, setSelectedAccountId] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return window.sessionStorage.getItem("inbox:selectedAccount") ?? "";
-  });
-
-  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const selection = useAccountFilter();
+  const selectedAccountId = accounts.some((a) => a.id === selection.account)
+    ? selection.account
+    : (accounts[0]?.id ?? "");
+  const setSelectedAccountId = selection.select;
+  const [conversations, setConversations] = useState<ConversationListItem[]>(
+    [],
+  );
   const [convLoading, setConvLoading] = useState(true);
   const [convError, setConvError] = useState<string | null>(null);
 
@@ -57,6 +58,8 @@ export default function InboxPage() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const convRequest = useRef<AbortController | null>(null);
+  const msgRequest = useRef<AbortController | null>(null);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 
@@ -70,48 +73,45 @@ export default function InboxPage() {
         if (!payload.success) return;
         const next: AccountOption[] = payload.data.instagramAccounts ?? [];
         setAccounts(next);
-        setSelectedAccountId((prev) => {
-          // Keep the seeded account only if it's still connected; otherwise
-          // fall back to the default so a removed account can't wedge the inbox.
-          const stillValid = prev && next.some((a) => a.id === prev);
-          return stillValid
-            ? prev
-            : payload.data.selectedInstagramAccountId || next[0]?.id || "";
-        });
       })
       .catch(() => setAccounts([]));
   }, []);
-
-  // Remember the chosen account for the next visit.
-  useEffect(() => {
-    if (typeof window === "undefined" || !selectedAccountId) return;
-    window.sessionStorage.setItem("inbox:selectedAccount", selectedAccountId);
-  }, [selectedAccountId]);
 
   const loadConversations = useCallback(
     async (silent: boolean) => {
       if (!selectedAccountId) return;
       if (!silent) setConvLoading(true);
+      convRequest.current?.abort();
+      const controller = new AbortController();
+      convRequest.current = controller;
       try {
         const res = await fetch(
           `/api/instagram/conversations?instagramAccountId=${selectedAccountId}`,
-          { cache: "no-store" }
+          {
+            cache: "no-store",
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(10000),
+            ]),
+          },
         );
         const data = await res.json();
+        if (controller.signal.aborted) return;
         if (data.success) {
           setConversations(data.data.conversations);
           writeCache(convCacheKey(selectedAccountId), data.data.conversations);
           setConvError(null);
-        } else if (!silent) {
+        } else {
           setConvError(data.error ?? "Failed to load conversations");
         }
       } catch {
-        if (!silent) setConvError("Failed to load conversations");
+        if (!controller.signal.aborted)
+          setConvError("Failed to load conversations");
       } finally {
-        if (!silent) setConvLoading(false);
+        if (!silent && !controller.signal.aborted) setConvLoading(false);
       }
     },
-    [selectedAccountId]
+    [selectedAccountId],
   );
 
   // Load + poll conversations for the selected account. A cached list is shown
@@ -122,10 +122,11 @@ export default function InboxPage() {
     // synchronous reset on a dependency change, not derived render state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveId(null);
+    setDraft("");
     setMessages([]);
     const cached = readCache<ConversationListItem[]>(
       convCacheKey(selectedAccountId),
-      CACHE_MAX_AGE_MS
+      CACHE_MAX_AGE_MS,
     );
     if (cached.data) {
       setConversations(cached.data);
@@ -135,31 +136,41 @@ export default function InboxPage() {
       setConvLoading(true);
     }
     void loadConversations(Boolean(cached.data));
-    const timer = window.setInterval(() => void loadConversations(true), POLL_MS);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadConversations(true);
+    }, POLL_MS);
+    return () => {
+      window.clearInterval(timer);
+      convRequest.current?.abort();
+      msgRequest.current?.abort();
+    };
   }, [selectedAccountId, loadConversations]);
 
   const loadMessages = useCallback(
     async (conversationId: string, silent: boolean) => {
       if (!selectedAccountId) return;
       if (!silent) setThreadLoading(true);
+      msgRequest.current?.abort();
+      const controller = new AbortController();
+      msgRequest.current = controller;
       try {
         const res = await fetch(
           `/api/instagram/conversations/${conversationId}?instagramAccountId=${selectedAccountId}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const data = await res.json();
         if (data.success) {
+          if (controller.signal.aborted) return;
           setMessages(data.data.messages);
           writeCache(msgCacheKey(conversationId), data.data.messages);
         }
       } catch {
         // keep whatever is shown
       } finally {
-        if (!silent) setThreadLoading(false);
+        if (!silent && !controller.signal.aborted) setThreadLoading(false);
       }
     },
-    [selectedAccountId]
+    [selectedAccountId],
   );
 
   // Load + poll the open thread. Cached messages render instantly while a fresh
@@ -168,7 +179,7 @@ export default function InboxPage() {
     if (!activeId) return;
     const cached = readCache<ThreadMessage[]>(
       msgCacheKey(activeId),
-      CACHE_MAX_AGE_MS
+      CACHE_MAX_AGE_MS,
     );
     if (cached.data) {
       // Paint cached messages instantly on thread change; intentional reset.
@@ -180,10 +191,10 @@ export default function InboxPage() {
       setThreadLoading(true);
     }
     void loadMessages(activeId, Boolean(cached.data));
-    const timer = window.setInterval(
-      () => void loadMessages(activeId, true),
-      POLL_MS
-    );
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible")
+        void loadMessages(activeId, true);
+    }, POLL_MS);
     return () => window.clearInterval(timer);
   }, [activeId, loadMessages]);
 
@@ -194,11 +205,16 @@ export default function InboxPage() {
   }, [messages]);
 
   function openConversation(id: string) {
+    msgRequest.current?.abort();
     setActiveId(id);
+    setDraft("");
     setSendError(null);
     // Paint any cached thread synchronously so the pane never flashes empty
     // or shows the previously open conversation while the fetch runs.
-    const cached = readCache<ThreadMessage[]>(msgCacheKey(id), CACHE_MAX_AGE_MS);
+    const cached = readCache<ThreadMessage[]>(
+      msgCacheKey(id),
+      CACHE_MAX_AGE_MS,
+    );
     setMessages(cached.data ?? []);
     setThreadLoading(!cached.data);
   }
@@ -270,7 +286,7 @@ export default function InboxPage() {
         )}
       </div>
 
-      <div className="grid h-[calc(100dvh-11rem)] grid-cols-1 overflow-hidden rounded border border-border sm:grid-cols-[300px_1fr]">
+      <div className="grid h-[calc(100dvh-17rem-env(safe-area-inset-bottom))] min-h-80 lg:h-[calc(100dvh-11rem)] grid-cols-1 overflow-hidden rounded border border-border sm:grid-cols-[300px_1fr]">
         {/* Conversation list. On mobile it takes the full pane and is hidden
             once a thread is open (ManyChat-style); on sm+ it is always shown. */}
         <div
@@ -285,9 +301,19 @@ export default function InboxPage() {
             {convLoading ? (
               <p className="px-4 py-6 text-sm text-muted">Loading…</p>
             ) : convError ? (
-              <p className="px-4 py-6 text-sm text-error">{convError}</p>
+              <div role="alert" className="px-4 py-6 text-sm text-error">
+                <p>{convError}</p>
+                <button
+                  onClick={() => void loadConversations(false)}
+                  className="mt-2 min-h-11 underline"
+                >
+                  Try again
+                </button>
+              </div>
             ) : conversations.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-muted">No conversations yet.</p>
+              <p className="px-4 py-6 text-sm text-muted">
+                No conversations yet.
+              </p>
             ) : (
               conversations.map((c) => {
                 const isActive = c.id === activeId;
@@ -346,7 +372,10 @@ export default function InboxPage() {
                 </span>
               </div>
 
-              <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+              <div
+                ref={scrollRef}
+                className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4"
+              >
                 {threadLoading && messages.length === 0 ? (
                   <p className="text-sm text-muted">Loading…</p>
                 ) : messages.length === 0 ? (
@@ -364,7 +393,9 @@ export default function InboxPage() {
                             : "bg-surface text-foreground border border-border"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                        <p className="whitespace-pre-wrap break-words">
+                          {m.text}
+                        </p>
                         <p
                           className={`mt-1 text-[10px] ${
                             m.fromMe ? "text-white/70" : "text-zinc-500"

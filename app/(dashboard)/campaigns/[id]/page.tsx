@@ -8,10 +8,18 @@
  * live in the top bar.
  */
 
+import {
+  useApiData,
+  requestData,
+  invalidateApiCache,
+} from "@/lib/use-api-data";
+import DataFeedback from "@/components/data-feedback";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import CampaignPreview, { type PreviewTab } from "@/components/campaign-preview";
+import Link from "@/components/remembered-link";
+import CampaignPreview, {
+  type PreviewTab,
+} from "@/components/campaign-preview";
 
 interface Campaign {
   id: string;
@@ -60,9 +68,13 @@ export default function CampaignDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const result = useApiData<Campaign[]>(
+    `/api/automations?id=${encodeURIComponent(id)}`,
+    60000,
+  );
+  const campaign = result.data?.[0] ?? null;
+  const notFound = result.error?.status === 404;
+  const [actionError, setActionError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [postThumb, setPostThumb] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("insights");
@@ -70,25 +82,12 @@ export default function CampaignDetailPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/automations", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((payload) => {
-        if (!payload.success) return setNotFound(true);
-        const found = (payload.data as Campaign[]).find((c) => c.id === id);
-        if (!found) return setNotFound(true);
-        setCampaign(found);
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    if (!campaign) return;
+    if (!campaign || tab !== "preview") return;
     const acct = campaign.instagramAccountId;
     fetch(`/api/instagram/profile?instagramAccountId=${acct}`)
       .then((r) => r.json())
       .then((d) =>
-        setAvatarUrl(d.success ? d.data.profilePictureUrl ?? null : null)
+        setAvatarUrl(d.success ? (d.data.profilePictureUrl ?? null) : null),
       )
       .catch(() => setAvatarUrl(null));
 
@@ -108,26 +107,29 @@ export default function CampaignDetailPage() {
         })
         .catch(() => setPostThumb(null));
     }
-  }, [campaign]);
+  }, [campaign, tab]);
 
   async function toggleActive() {
     if (!campaign) return;
     setBusy(true);
     try {
-      await fetch(`/api/automations?id=${campaign.id}`, {
+      await requestData(`/api/automations?id=${campaign.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !campaign.isActive }),
       });
-      setCampaign({ ...campaign, isActive: !campaign.isActive });
+      invalidateApiCache();
+      setActionError(null);
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not update campaign",
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  if (loading) {
-    return <div className="panel h-64 rounded" />;
-  }
+  if (!campaign && !notFound) return <DataFeedback {...result} />;
   if (notFound || !campaign) {
     return (
       <div className="panel rounded p-8 text-center">
@@ -170,7 +172,7 @@ export default function CampaignDetailPage() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_1fr]">
       {/* Left: config summary */}
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <div className="flex items-center gap-2">
           <Link
             href="/campaigns"
@@ -188,7 +190,7 @@ export default function CampaignDetailPage() {
                 : "bg-zinc-500/10 text-muted"
             }`}
           >
-            {campaign.isActive ? "LIVE" : "Paused"}
+            {campaign.isActive ? "Enabled" : "Paused"}
           </span>
         </div>
 
@@ -203,7 +205,9 @@ export default function CampaignDetailPage() {
               />
             ) : (
               <div className="grid h-14 w-14 place-items-center rounded bg-surface-hover text-[10px] text-muted">
-                {campaign.matchAnyPost || campaign.pendingNextReel ? "Any" : "Post"}
+                {campaign.matchAnyPost || campaign.pendingNextReel
+                  ? "Any"
+                  : "Post"}
               </div>
             )}
             <span className="text-sm text-foreground">{trigger}</span>
@@ -230,7 +234,9 @@ export default function CampaignDetailPage() {
 
         {campaign.openingDmEnabled && (
           <Summary title="They will get an opening DM">
-            <FieldBox>{campaign.openingDmMessage || "Opening message"}</FieldBox>
+            <FieldBox>
+              {campaign.openingDmMessage || "Opening message"}
+            </FieldBox>
             <FieldBox>{campaign.openingDmButtonLabel || "Button"}</FieldBox>
           </Summary>
         )}
@@ -283,7 +289,8 @@ export default function CampaignDetailPage() {
           <Summary title="Then a follow-up message">
             <FieldBox>{campaign.followUpMessage}</FieldBox>
             <p className="text-xs text-muted">
-              {campaign.followUpDelayMinutes && campaign.followUpDelayMinutes > 0
+              {campaign.followUpDelayMinutes &&
+              campaign.followUpDelayMinutes > 0
                 ? `Sent ${campaign.followUpDelayMinutes} min after the link.`
                 : "Sent right after the link."}
             </p>
@@ -292,13 +299,26 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Right: top bar + tabs */}
-      <div className="space-y-4">
+      <div className="order-first min-w-0 space-y-4 lg:order-none">
+        <h2 className="break-words text-xl font-semibold">{campaign.name}</h2>
+        <DataFeedback {...result} />
+        {actionError && (
+          <p role="alert" className="text-sm text-error">
+            {actionError}
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 border-b border-border pb-3">
           <div className="flex gap-4">
-            <TabButton active={tab === "insights"} onClick={() => setTab("insights")}>
+            <TabButton
+              active={tab === "insights"}
+              onClick={() => setTab("insights")}
+            >
               Insights
             </TabButton>
-            <TabButton active={tab === "preview"} onClick={() => setTab("preview")}>
+            <TabButton
+              active={tab === "preview"}
+              onClick={() => setTab("preview")}
+            >
               Preview
             </TabButton>
           </div>
@@ -311,7 +331,7 @@ export default function CampaignDetailPage() {
             </Link>
             <button
               onClick={toggleActive}
-              disabled={busy}
+              disabled={busy || result.loading}
               className={`rounded border px-3 py-1.5 text-sm disabled:opacity-50 ${
                 campaign.isActive
                   ? "border-error/30 text-error hover:bg-error/10"
@@ -338,40 +358,44 @@ export default function CampaignDetailPage() {
 
         {tab === "preview" && (
           <div className="flex justify-center sm:justify-start">
-          <CampaignPreview
-            tab={previewTab}
-            onTabChange={setPreviewTab}
-            username={campaign.instagramAccount.username}
-            avatarUrl={avatarUrl}
-            postThumb={postThumb}
-            caption=""
-            sampleComment={campaign.matchAnyWord ? "nice!" : campaign.keywords[0] ?? "LINK"}
-            dmTriggerEnabled={campaign.dmTriggerEnabled}
-            publicReplyEnabled={campaign.publicReplyEnabled}
-            publicReplyMessage={publicReplies[0] ?? ""}
-            openingDmEnabled={campaign.openingDmEnabled}
-            openingDmMessage={campaign.openingDmMessage ?? ""}
-            openingDmButtonLabel={campaign.openingDmButtonLabel ?? ""}
-            revealMessage={campaign.dmMessage}
-            hasLink={hasLink}
-            linkButtonLabel={campaign.linkButtonLabel ?? "Open link"}
-            linkUrl={
-              campaign.trackedLinks?.[0]?.trackedUrl ??
-              campaign.trackedLinks?.[0]?.destinationUrl
-            }
-            hasSecondLink={hasSecondLink}
-            secondLinkButtonLabel={
-              campaign.trackedLinks?.[1]?.label ?? "Open link"
-            }
-            requireFollow={campaign.requireFollow}
-            followPromptMessage={campaign.followPromptMessage ?? ""}
-            followPromptButtonLabel={
-              campaign.followPromptButtonLabel ?? "i'm following"
-            }
-            followUpEnabled={campaign.followUpEnabled ?? false}
-            followUpMessage={campaign.followUpMessage ?? ""}
-            followUpDelayMinutes={campaign.followUpDelayMinutes ?? 0}
-          />
+            <CampaignPreview
+              tab={previewTab}
+              onTabChange={setPreviewTab}
+              username={campaign.instagramAccount.username}
+              avatarUrl={avatarUrl}
+              postThumb={postThumb}
+              caption=""
+              sampleComment={
+                campaign.matchAnyWord
+                  ? "nice!"
+                  : (campaign.keywords[0] ?? "LINK")
+              }
+              dmTriggerEnabled={campaign.dmTriggerEnabled}
+              publicReplyEnabled={campaign.publicReplyEnabled}
+              publicReplyMessage={publicReplies[0] ?? ""}
+              openingDmEnabled={campaign.openingDmEnabled}
+              openingDmMessage={campaign.openingDmMessage ?? ""}
+              openingDmButtonLabel={campaign.openingDmButtonLabel ?? ""}
+              revealMessage={campaign.dmMessage}
+              hasLink={hasLink}
+              linkButtonLabel={campaign.linkButtonLabel ?? "Open link"}
+              linkUrl={
+                campaign.trackedLinks?.[0]?.trackedUrl ??
+                campaign.trackedLinks?.[0]?.destinationUrl
+              }
+              hasSecondLink={hasSecondLink}
+              secondLinkButtonLabel={
+                campaign.trackedLinks?.[1]?.label ?? "Open link"
+              }
+              requireFollow={campaign.requireFollow}
+              followPromptMessage={campaign.followPromptMessage ?? ""}
+              followPromptButtonLabel={
+                campaign.followPromptButtonLabel ?? "i'm following"
+              }
+              followUpEnabled={campaign.followUpEnabled ?? false}
+              followUpMessage={campaign.followUpMessage ?? ""}
+              followUpDelayMinutes={campaign.followUpDelayMinutes ?? 0}
+            />
           </div>
         )}
       </div>
@@ -379,7 +403,13 @@ export default function CampaignDetailPage() {
   );
 }
 
-function Summary({ title, children }: { title: string; children: React.ReactNode }) {
+function Summary({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-2">
       <h2 className="text-sm font-semibold text-foreground">{title}</h2>

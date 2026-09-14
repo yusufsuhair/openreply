@@ -6,17 +6,17 @@
  * Text-only nav with active state and workspace section.
  */
 
-import Link from "next/link";
+import Link from "@/components/remembered-link";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Overview", href: "/overview" },
-  { label: "Inbox", href: "/inbox" },
+export const navItems = [
+  { label: "Home", href: "/dashboard" },
   { label: "Campaigns", href: "/campaigns" },
-  { label: "DM Logs", href: "/logs" },
+  { label: "Inbox", href: "/inbox" },
+  { label: "Analytics", href: "/overview" },
+  { label: "Activity", href: "/logs" },
   { label: "Settings", href: "/settings" },
-  { label: "Diagnostics", href: "/diagnostics" },
 ];
 
 interface SidebarProps {
@@ -31,6 +31,37 @@ export default function Sidebar({
   workspaceName,
 }: SidebarProps) {
   const pathname = usePathname();
+  const drawer = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const element = drawer.current;
+    const focusables = () =>
+      Array.from(
+        element?.querySelectorAll<HTMLElement>("a[href], button") ?? [],
+      );
+    focusables()[0]?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key === "Tab") {
+        const items = focusables();
+        const first = items[0],
+          last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus();
+    };
+  }, [isOpen, onClose]);
 
   return (
     <>
@@ -43,13 +74,24 @@ export default function Sidebar({
       )}
 
       <aside
+        ref={drawer}
+        aria-label="Main navigation"
+        role={isOpen ? "dialog" : undefined}
+        aria-modal={isOpen || undefined}
         className={`
           fixed top-0 left-0 z-50 h-dvh w-64 max-w-[85vw] shrink-0 bg-surface border-r border-border flex flex-col
           transition-transform duration-200 ease-out
           lg:h-full lg:translate-x-0 lg:static lg:z-auto
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+          ${isOpen ? "visible translate-x-0" : "invisible -translate-x-full lg:visible"}
         `}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-11 px-6 text-left text-sm underline lg:hidden"
+        >
+          Close navigation
+        </button>
         {/* Same reason as the top bar: the drawer is full height, so the
             wordmark would otherwise land under the status bar. */}
         <div

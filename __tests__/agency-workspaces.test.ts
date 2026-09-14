@@ -37,7 +37,7 @@ describe("agency workspace helpers", () => {
       canConnectInstagramAccount({
         workspaceId: "workspace_123",
         instagramId: "ig_123",
-      })
+      }),
     ).resolves.toMatchObject({ allowed: true, reason: null });
   });
 
@@ -50,7 +50,7 @@ describe("agency workspace helpers", () => {
       canConnectInstagramAccount({
         workspaceId: "workspace_123",
         instagramId: "ig_123",
-      })
+      }),
     ).resolves.toMatchObject({
       allowed: false,
       reason: "already_connected",
@@ -64,32 +64,37 @@ describe("agency workspace helpers", () => {
       canConnectInstagramAccount({
         workspaceId: "workspace_123",
         instagramId: "ig_123",
-      })
+      }),
     ).resolves.toMatchObject({ allowed: true, reason: null });
   });
 
   it("selects a requested workspace account or falls back to the latest account", async () => {
-    mockPrisma.instagramAccount.findFirst.mockResolvedValue({ id: "account_1" });
+    mockPrisma.instagramAccount.findFirst.mockResolvedValue({
+      id: "account_1",
+    });
 
     await getWorkspaceInstagramAccount("workspace_123", "account_1");
     expect(mockPrisma.instagramAccount.findFirst).toHaveBeenCalledWith({
-      where: { id: "account_1", workspaceId: "workspace_123" },
+      where: {
+        id: "account_1",
+        workspaceId: "workspace_123",
+        accessToken: { not: "" },
+      },
     });
 
     await getWorkspaceInstagramAccount("workspace_123", "all");
     expect(mockPrisma.instagramAccount.findFirst).toHaveBeenLastCalledWith({
-      where: { workspaceId: "workspace_123" },
+      where: { workspaceId: "workspace_123", accessToken: { not: "" } },
       orderBy: { connectedAt: "desc" },
     });
   });
 
   it("normalizes invitation emails and builds invite URLs", () => {
     expect(normalizeInvitationEmail(" Team@Agency.COM ")).toBe(
-      "team@agency.com"
+      "team@agency.com",
     );
-    expect(buildInvitationUrl("token_123", "https://manychat-alternative.com/")).toBe(
-      "https://manychat-alternative.com/invite/token_123"
-    );
+    expect(
+      buildInvitationUrl("token_123", "https://manychat-alternative.com/"),
+    ).toBe("https://manychat-alternative.com/invite/token_123");
   });
 });
-

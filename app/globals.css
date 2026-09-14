@@ -11,11 +11,11 @@
   --color-border: #e4e4e7;
   --color-border-hover: #d4d4d8;
   --color-muted: #71717a;
-  --color-accent: #f97316;
-  --color-accent-hover: #ea580c;
-  --color-success: #16a34a;
+  --color-accent: #c2410c;
+  --color-accent-hover: #9a3412;
+  --color-success: #15803d;
   --color-error: #dc2626;
-  --color-warning: #d97706;
+  --color-warning: #92400e;
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, monospace;
 }
@@ -87,4 +87,29 @@ select:focus-visible {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Dashboard touch controls remain usable with a thumb and the on-screen keyboard. */
+@media (max-width: 1023px) {
+  #main-content button,
+  #main-content select,
+  #main-content input:not([type="checkbox"]):not([type="radio"]),
+  #main-content summary {
+    min-height: 44px;
+  }
+  #main-content button {
+    touch-action: manipulation;
+  }
+}
+::selection {
+  background: #ffedd5;
+  color: #7c2d12;
+}
+input,
+textarea {
+  caret-color: var(--color-accent);
+}
+main {
+  scrollbar-color: #d4d4d8 transparent;
+  scrollbar-width: thin;
 }

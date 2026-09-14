@@ -8,15 +8,18 @@ export async function GET(request: NextRequest) {
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
   const searchParams = request.nextUrl.searchParams;
-  const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10));
+  const page = Math.max(
+    1,
+    Number.parseInt(searchParams.get("page") ?? "1", 10) || 1,
+  );
   const limit = Math.min(
     50,
-    Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 10))
+    Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 10) || 20),
   );
   const status = searchParams.get("status");
   const instagramAccountId = searchParams.get("instagramAccountId");
@@ -26,7 +29,9 @@ export async function GET(request: NextRequest) {
       ? (status as DmStatus)
       : null;
 
+  const automationId = searchParams.get("automationId");
   const where = {
+    ...(automationId ? { automationId } : {}),
     workspaceId,
     ...(parsedStatus ? { status: parsedStatus } : {}),
     ...(instagramAccountId && instagramAccountId !== "all"
@@ -41,7 +46,7 @@ export async function GET(request: NextRequest) {
       skip,
       take: limit,
       include: {
-        automation: { select: { name: true, keywords: true } },
+        automation: { select: { id: true, name: true, keywords: true } },
         instagramAccount: { select: { username: true } },
       },
     }),

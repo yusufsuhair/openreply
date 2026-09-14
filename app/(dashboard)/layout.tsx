@@ -1,3 +1,4 @@
+import { AccountProvider } from "@/components/account-context";
 import { redirect } from "next/navigation";
 import DashboardShell from "@/components/dashboard-shell";
 import { auth } from "@/lib/auth";
@@ -17,7 +18,7 @@ export default async function DashboardLayout({
 
   const workspace = await ensureWorkspaceForUser(
     session.user.id,
-    session.user.email
+    session.user.email,
   );
   const accounts = await prisma.instagramAccount.findMany({
     where: { workspaceId: workspace.id },
@@ -26,12 +27,14 @@ export default async function DashboardLayout({
   });
 
   return (
-    <DashboardShell
-      workspaceName={workspace.name}
-      instagramUsername={accounts[0]?.username ?? null}
-      instagramAccountCount={accounts.length}
-    >
-      {children}
-    </DashboardShell>
+    <AccountProvider scope={`${session.user.id}:${workspace.id}`}>
+      <DashboardShell
+        workspaceName={workspace.name}
+        instagramUsername={accounts[0]?.username ?? null}
+        instagramAccountCount={accounts.length}
+      >
+        {children}
+      </DashboardShell>
+    </AccountProvider>
   );
 }

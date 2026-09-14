@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useAccountFilter } from "@/components/account-context";
 import { useRouter } from "next/navigation";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { parseCsv } from "@/lib/utils/csv";
@@ -20,23 +21,33 @@ const SAMPLE = `keywords,dm_message,public_reply,tracked_url,opening_dm,opening_
 
 export default function ImportCampaignsPage() {
   const router = useRouter();
+  const selection = useAccountFilter();
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [csv, setCsv] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/dashboard/stats")
+    if (!selection.ready) return;
+    fetch("/api/instagram/accounts")
       .then((res) => res.json())
       .then((payload) => {
         if (payload.success) {
           const next = payload.data.instagramAccounts ?? [];
           setAccounts(next);
-          setSelectedAccountId(next[0]?.id ?? "");
+          setSelectedAccountId(
+            next.some((a: AccountOption) => a.id === selection.account)
+              ? selection.account
+              : (next[0]?.id ?? ""),
+          );
         }
       })
-      .catch(() => setAccounts([]));
-  }, []);
+      .catch(() =>
+        setError(
+          "Could not load Instagram accounts. Reload this page to try again.",
+        ),
+      );
+  }, [selection.ready, selection.account]);
 
   function startImport() {
     setError(null);
