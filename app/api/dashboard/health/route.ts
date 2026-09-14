@@ -16,7 +16,7 @@ export async function GET() {
       { status: 401 },
     );
   const accounts = await prisma.instagramAccount.findMany({
-    where: { workspaceId },
+    where: { workspaceId, accessToken: { not: "" } },
     orderBy: { connectedAt: "desc" },
   });
   const cache = getReadCache();
