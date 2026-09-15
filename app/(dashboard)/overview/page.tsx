@@ -8,7 +8,7 @@
  * the insights permission); likes and comments are always available.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAccountFilter, updateQuery } from "@/components/account-context";
@@ -19,6 +19,12 @@ import StatCard from "@/components/stat-card";
 import FollowerChart from "@/components/follower-chart";
 import type { OverviewResponse } from "@/app/api/instagram/overview/route";
 import { formatMalaysiaDate } from "@/lib/malaysia-time";
+import {
+  overviewSortColumns,
+  sortOverviewPosts,
+  type OverviewSortKey,
+  type SortDirection,
+} from "@/lib/overview-sort";
 
 function formatNumber(n: number | null): string {
   if (n === null) return "—";
@@ -59,7 +65,27 @@ export default function OverviewPage() {
   );
   const data = result.data;
   const [visible, setVisible] = useState(10);
-  const posts = data?.posts ?? [];
+  const [sortKey, setSortKey] = useState<OverviewSortKey>("timestamp");
+  const [sortDirection, setSortDirection] =
+    useState<SortDirection>("descending");
+  const posts = data?.posts;
+  const sortedPosts = useMemo(
+    () => sortOverviewPosts(posts ?? [], sortKey, sortDirection),
+    [posts, sortDirection, sortKey],
+  );
+  function changeSort(key: OverviewSortKey) {
+    setSortDirection((direction) =>
+      key === sortKey
+        ? direction === "ascending"
+          ? "descending"
+          : "ascending"
+        : key === "caption"
+          ? "ascending"
+          : "descending",
+    );
+    setSortKey(key);
+    setVisible(10);
+  }
   function changeAccount(id: string) {
     selection.select(id);
     setVisible(10);
@@ -133,7 +159,7 @@ export default function OverviewPage() {
       {data && (
         <>
           <p className="text-sm text-muted">
-            {posts.length} posts from @{data.account.username}
+            {sortedPosts.length} posts from @{data.account.username}
             {data.truncated ? " (limited to 500 posts)" : ""}
             {data.refreshing ? " · Updating Instagram snapshot…" : ""}
           </p>
@@ -168,11 +194,11 @@ export default function OverviewPage() {
           />
           <section aria-label="Post performance" className="space-y-3">
             <h2 className="text-lg font-semibold">Posts</h2>
-            {posts.length === 0 && (
+            {sortedPosts.length === 0 && (
               <p className="text-muted">No posts found.</p>
             )}
             <div className="space-y-3 md:hidden">
-              {posts.slice(0, visible).map((post) => (
+              {sortedPosts.slice(0, visible).map((post) => (
                 <article
                   key={post.id}
                   className="rounded-xl border border-border p-4"
@@ -216,24 +242,37 @@ export default function OverviewPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="p-3">Post</th>
-                    {[
-                      "Views",
-                      "Reach",
-                      "Likes",
-                      "Comments",
-                      "Saved",
-                      "Shares",
-                      "Date",
-                    ].map((label) => (
-                      <th key={label} className="p-3 text-right">
-                        {label}
+                    {overviewSortColumns.map(([key, label], index) => (
+                      <th
+                        key={key}
+                        aria-sort={
+                          key === sortKey
+                            ? sortDirection
+                            : "none"
+                        }
+                        className={index === 0 ? "p-3" : "p-3 text-right"}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => changeSort(key)}
+                          className="inline-flex min-h-11 items-center gap-1 font-semibold hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={`Sort by ${label}${key === sortKey ? `, currently ${sortDirection}` : ""}`}
+                        >
+                          {label}
+                          <span aria-hidden="true">
+                            {key === sortKey
+                              ? sortDirection === "ascending"
+                                ? "↑"
+                                : "↓"
+                              : "↕"}
+                          </span>
+                        </button>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {posts.slice(0, visible).map((post) => (
+                  {sortedPosts.slice(0, visible).map((post) => (
                     <tr
                       key={post.id}
                       className="border-b border-border last:border-0"
@@ -272,13 +311,13 @@ export default function OverviewPage() {
                 </tbody>
               </table>
             </div>
-            {visible < posts.length && (
+            {visible < sortedPosts.length && (
               <button
                 onClick={() => setVisible((n) => n + 10)}
                 className="min-h-11 w-full rounded-lg border border-border px-4 text-sm"
               >
-                Show 10 more posts ({Math.min(visible, posts.length)} of{" "}
-                {posts.length})
+                Show 10 more posts ({Math.min(visible, sortedPosts.length)} of{" "}
+                {sortedPosts.length})
               </button>
             )}
           </section>
