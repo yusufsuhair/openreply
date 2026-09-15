@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 10,
       include: {
-        automation: { select: { name: true } },
+        automation: { select: { name: true, postUrl: true } },
         instagramAccount: { select: { username: true } },
       },
     }),

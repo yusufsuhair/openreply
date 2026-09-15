@@ -39,9 +39,19 @@ interface DashboardStats {
     commentText: string;
     status: string;
     createdAt: string;
-    automation: { name: string };
+    automation: { name: string; postUrl: string | null };
     instagramAccount?: { username: string };
   }>;
+}
+
+function formatActivityDate(value: string) {
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export default function DashboardPage() {
@@ -207,6 +217,20 @@ export default function DashboardPage() {
                           : ""}
                         {log.commentText}
                       </p>
+                      <p className="mt-1 text-xs text-muted">
+                        {formatActivityDate(log.createdAt)}
+                      </p>
+                      {log.automation.postUrl && (
+                        <a
+                          href={log.automation.postUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 block truncate text-xs text-accent hover:underline"
+                          title={log.automation.postUrl}
+                        >
+                          {log.automation.postUrl}
+                        </a>
+                      )}
                     </div>
                     <StatusBadge status={log.status} />
                   </div>
