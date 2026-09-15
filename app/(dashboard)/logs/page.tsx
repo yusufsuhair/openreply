@@ -13,6 +13,7 @@ import { useApiData } from "@/lib/use-api-data";
 import DataFeedback from "@/components/data-feedback";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import StatusBadge from "@/components/status-badge";
+import { formatMalaysiaDateTime } from "@/lib/malaysia-time";
 
 interface DmLog {
   id: string;
@@ -135,7 +136,7 @@ export default function LogsPage() {
             </Link>
             <p className="text-sm text-muted">
               @{log.instagramAccount.username} ·{" "}
-              {new Date(log.createdAt).toLocaleString()}
+              {formatMalaysiaDateTime(log.createdAt)}
             </p>
             {log.errorMessage && (
               <details className="mt-2 text-sm">
@@ -202,7 +203,7 @@ export default function LogsPage() {
                     <StatusBadge status={log.status} />
                   </td>
                   <td className="p-3">
-                    {new Date(log.createdAt).toLocaleString()}
+                    {formatMalaysiaDateTime(log.createdAt)}
                   </td>
                 </tr>
               ))}

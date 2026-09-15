@@ -18,6 +18,7 @@ import AccountSelect from "@/components/account-select";
 import StatCard from "@/components/stat-card";
 import FollowerChart from "@/components/follower-chart";
 import type { OverviewResponse } from "@/app/api/instagram/overview/route";
+import { formatMalaysiaDate } from "@/lib/malaysia-time";
 
 function formatNumber(n: number | null): string {
   if (n === null) return "—";
@@ -27,8 +28,7 @@ function formatNumber(n: number | null): string {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatMalaysiaDate(iso, { month: "short", day: "numeric" });
 }
 
 const COUNT_OPTIONS = [

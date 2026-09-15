@@ -7,6 +7,12 @@ import {
   normalizeTopKeywords,
   summarizeDmStatuses,
 } from "@/lib/tracking/analytics";
+import {
+  formatMalaysiaDate,
+  malaysiaDateKey,
+  malaysiaDayWindow,
+  malaysiaMonthStart,
+} from "@/lib/malaysia-time";
 
 export async function GET(request: NextRequest) {
   const workspaceId = await getCurrentWorkspaceId();
@@ -20,14 +26,9 @@ export async function GET(request: NextRequest) {
   const userId = await getCurrentUserId();
 
   const now = new Date();
-  const todayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  const weekStart = new Date(todayStart);
-  weekStart.setUTCDate(weekStart.getUTCDate() - 7);
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
+  const todayStart = malaysiaDayWindow(0, now).start;
+  const weekStart = malaysiaDayWindow(7, now).start;
+  const monthStart = malaysiaMonthStart(now);
   const requestedInstagramAccountId =
     request.nextUrl.searchParams.get("instagramAccountId");
   const selectedAccountId =
@@ -154,15 +155,13 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  const chartStart = new Date(todayStart);
-  chartStart.setUTCDate(chartStart.getUTCDate() - 6);
-  const chartEnd = new Date(todayStart);
-  chartEnd.setUTCDate(chartEnd.getUTCDate() + 1);
-  // One database round trip for all seven UTC days.
+  const chartStart = malaysiaDayWindow(6, now).start;
+  const chartEnd = malaysiaDayWindow(0, now).end;
+  // One database round trip for all seven Kuala Lumpur calendar days.
   const dailyRows = await prisma.$queryRaw<
     { day: string; count: number }[]
   >(Prisma.sql`
-    SELECT to_char("createdAt", 'YYYY-MM-DD') AS day, count(*)::int AS count
+    SELECT to_char("createdAt" AT TIME ZONE 'Asia/Kuala_Lumpur', 'YYYY-MM-DD') AS day, count(*)::int AS count
     FROM "DmLog"
     WHERE "workspaceId" = ${workspaceId} AND status = 'SENT'
       AND "createdAt" >= ${chartStart} AND "createdAt" < ${chartEnd}
@@ -171,14 +170,12 @@ export async function GET(request: NextRequest) {
   `);
   const countsByDay = new Map(dailyRows.map((row) => [row.day, row.count]));
   const dailyDMs = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(chartStart);
-    day.setUTCDate(day.getUTCDate() + index);
+    const day = malaysiaDayWindow(6 - index, now).start;
     return {
-      date: day.toLocaleDateString("en-US", {
+      date: formatMalaysiaDate(day, {
         weekday: "short",
-        timeZone: "UTC",
       }),
-      count: countsByDay.get(day.toISOString().slice(0, 10)) ?? 0,
+      count: countsByDay.get(malaysiaDateKey(day)) ?? 0,
     };
   });
 

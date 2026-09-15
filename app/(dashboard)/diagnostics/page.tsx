@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StatusBadge from "@/components/status-badge";
+import { formatMalaysiaDateTime } from "@/lib/malaysia-time";
 
 interface DiagnosticsData {
   queueCounts: Record<string, number>;
@@ -53,7 +54,7 @@ interface DiagnosticsData {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString();
+  return formatMalaysiaDateTime(value);
 }
 
 function EmptyState({ label }: { label: string }) {
@@ -201,7 +202,10 @@ export default function DiagnosticsPage() {
           {data?.dmFailures.length ? (
             <div className="space-y-3">
               {data.dmFailures.map((item) => (
-                <div key={item.id} className="border-b border-border pb-3 last:border-0">
+                <div
+                  key={item.id}
+                  className="border-b border-border pb-3 last:border-0"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                     <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                       {item.automation.name}
@@ -212,7 +216,9 @@ export default function DiagnosticsPage() {
                     {item.commentText}
                   </p>
                   {item.errorMessage && (
-                    <p className="mt-1 text-xs text-error">{item.errorMessage}</p>
+                    <p className="mt-1 text-xs text-error">
+                      {item.errorMessage}
+                    </p>
                   )}
                 </div>
               ))}
@@ -226,7 +232,10 @@ export default function DiagnosticsPage() {
           {data?.webhookFailures.length ? (
             <div className="space-y-3">
               {data.webhookFailures.map((event) => (
-                <div key={event.id} className="border-b border-border pb-3 last:border-0">
+                <div
+                  key={event.id}
+                  className="border-b border-border pb-3 last:border-0"
+                >
                   <p className="text-sm font-semibold text-foreground">
                     {event.object ?? "Instagram webhook"}
                   </p>
@@ -250,7 +259,10 @@ export default function DiagnosticsPage() {
           {data?.tokenRefreshFailures.length ? (
             <div className="space-y-3">
               {data.tokenRefreshFailures.map((event) => (
-                <div key={event.id} className="border-b border-border pb-3 last:border-0">
+                <div
+                  key={event.id}
+                  className="border-b border-border pb-3 last:border-0"
+                >
                   <p className="text-sm font-semibold text-foreground">
                     {event.message}
                   </p>
@@ -264,17 +276,23 @@ export default function DiagnosticsPage() {
             <EmptyState label="No token refresh failures." />
           )}
         </Section>
-
       </div>
 
       <Section title="Operational Event Timeline">
         {data?.operationalEvents.length ? (
           <div className="space-y-3">
             {data.operationalEvents.map((event) => (
-              <div key={event.id} className="grid gap-2 border-b border-border pb-3 last:border-0 sm:grid-cols-[140px_1fr_auto]">
-                <p className="text-xs font-semibold text-muted">{event.source}</p>
+              <div
+                key={event.id}
+                className="grid gap-2 border-b border-border pb-3 last:border-0 sm:grid-cols-[140px_1fr_auto]"
+              >
+                <p className="text-xs font-semibold text-muted">
+                  {event.source}
+                </p>
                 <p className="text-sm text-foreground">{event.message}</p>
-                <p className="text-xs text-muted">{formatDate(event.createdAt)}</p>
+                <p className="text-xs text-muted">
+                  {formatDate(event.createdAt)}
+                </p>
               </div>
             ))}
           </div>

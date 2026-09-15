@@ -16,6 +16,11 @@ import { useAccountFilter } from "@/components/account-context";
 import { readCache, writeCache } from "@/lib/client-cache";
 import type { ConversationListItem } from "@/app/api/instagram/conversations/route";
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
+import {
+  formatMalaysiaDate,
+  formatMalaysiaTime,
+  malaysiaDateKey,
+} from "@/lib/malaysia-time";
 
 const POLL_MS = 12_000;
 // Cached list/threads are shown instantly on revisit, then revalidated in the
@@ -30,10 +35,10 @@ function formatTime(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
+  const sameDay = malaysiaDateKey(d) === malaysiaDateKey(now);
   return sameDay
-    ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    ? formatMalaysiaTime(d)
+    : formatMalaysiaDate(d, { month: "short", day: "numeric" });
 }
 
 export default function InboxPage() {

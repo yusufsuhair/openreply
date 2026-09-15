@@ -14,6 +14,10 @@ import DataFeedback from "@/components/data-feedback";
 import AccountHealth from "@/components/account-health";
 import VideoDialog from "@/components/video-dialog";
 import { readCache, writeCache } from "@/lib/client-cache";
+import {
+  formatMalaysiaDate,
+  formatMalaysiaDateTime,
+} from "@/lib/malaysia-time";
 
 interface Campaign {
   id: string;
@@ -69,21 +73,12 @@ interface Campaign {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  return formatMalaysiaDate(value);
 }
 
 function formatLastSent(value: string | null) {
   if (!value) return "No DM sent yet";
-  return new Intl.DateTimeFormat("en-MY", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatMalaysiaDateTime(value);
 }
 
 export default function CampaignsPage() {

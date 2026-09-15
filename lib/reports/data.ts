@@ -5,6 +5,7 @@ import {
   summarizeDmStatuses,
 } from "@/lib/tracking/analytics";
 import { buildReportUrl, isReportBranded } from "@/lib/reports/share";
+import { formatMalaysiaDate, malaysiaDayWindow } from "@/lib/malaysia-time";
 
 function getHostname(url: string) {
   try {
@@ -15,14 +16,7 @@ function getHostname(url: string) {
 }
 
 function getDayWindow(daysAgo: number) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  start.setDate(start.getDate() - daysAgo);
-
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-
-  return { start, end };
+  return malaysiaDayWindow(daysAgo);
 }
 
 export async function getCampaignReportBySlug(shareSlug: string) {
@@ -108,13 +102,13 @@ export async function getCampaignReportBySlug(shareSlug: string) {
     statusRows.map((row) => ({
       status: row.status,
       _count: row._count._all,
-    }))
+    })),
   );
   const topKeywords = normalizeTopKeywords(
     keywordRows.map((row) => ({
       matchedKeyword: row.matchedKeyword,
       _count: row._count._all,
-    }))
+    })),
   );
   const daily = await Promise.all(
     Array.from({ length: 7 }, async (_, index) => {
@@ -139,14 +133,14 @@ export async function getCampaignReportBySlug(shareSlug: string) {
       ]);
 
       return {
-        date: start.toLocaleDateString("en-US", {
+        date: formatMalaysiaDate(start, {
           month: "short",
           day: "numeric",
         }),
         sent,
         clicks,
       };
-    })
+    }),
   );
 
   return {

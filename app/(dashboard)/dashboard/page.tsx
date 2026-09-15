@@ -14,6 +14,7 @@ import AccountHealth from "@/components/account-health";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import StatCard from "@/components/stat-card";
 import StatusBadge from "@/components/status-badge";
+import { formatMalaysiaDateTime } from "@/lib/malaysia-time";
 
 interface DashboardStats {
   userName: string | null;
@@ -45,13 +46,7 @@ interface DashboardStats {
 }
 
 function formatActivityDate(value: string) {
-  return new Intl.DateTimeFormat("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatMalaysiaDateTime(value);
 }
 
 export default function DashboardPage() {

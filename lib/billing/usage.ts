@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@/app/generated/prisma/client";
+import { malaysiaMonthStart } from "@/lib/malaysia-time";
 
 // Self-hosted build: usage is still counted per month so the dashboard can
 // report volume, but no cap is enforced. Meta's own rate limits apply instead.
@@ -9,12 +10,12 @@ import type { Prisma } from "@/app/generated/prisma/client";
 const MONTHLY_DM_LIMIT = 2_000_000_000;
 
 function getMonthStart(date = new Date()): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+  return malaysiaMonthStart(date);
 }
 
 async function resetUsageIfNeededTx(
   tx: Prisma.TransactionClient,
-  workspaceId: string
+  workspaceId: string,
 ): Promise<void> {
   const now = new Date();
   const monthStart = getMonthStart(now);
@@ -46,7 +47,7 @@ export interface WorkspaceDMReservation {
 }
 
 export async function reserveWorkspaceDMSend(
-  workspaceId: string
+  workspaceId: string,
 ): Promise<WorkspaceDMReservation> {
   return prisma.$transaction(async (tx) => {
     await resetUsageIfNeededTx(tx, workspaceId);
@@ -148,7 +149,7 @@ export async function canSendDMForWorkspace(workspaceId: string): Promise<{
 
 export async function releaseWorkspaceDMReservation(
   workspaceId: string,
-  periodStart: Date | null
+  periodStart: Date | null,
 ) {
   if (!periodStart) {
     return { count: 0 };

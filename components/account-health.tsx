@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useApiData } from "@/lib/use-api-data";
 import { useAccountFilter } from "@/components/account-context";
+import { formatMalaysiaTime } from "@/lib/malaysia-time";
 
 export default function AccountHealth({
   compact = false,
@@ -36,7 +37,7 @@ export default function AccountHealth({
           {loading
             ? "Checking…"
             : data
-              ? `Checked ${new Date(data.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+              ? `Checked ${formatMalaysiaTime(data.checkedAt)}`
               : "Unavailable"}
         </span>
       </div>

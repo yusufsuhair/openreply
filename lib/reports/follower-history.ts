@@ -4,6 +4,7 @@ import {
   getUserInfo,
   type FollowerCountPoint,
 } from "@/lib/meta/client";
+import { malaysiaCalendarDate } from "@/lib/malaysia-time";
 
 export interface FollowerHistoryPoint {
   /** ISO date (YYYY-MM-DD). */
@@ -14,12 +15,11 @@ export interface FollowerHistoryPoint {
   delta: number | null;
 }
 
-/** Midnight UTC for a date, so one calendar day maps to exactly one row. */
-function toUtcDay(value: Date | string): Date {
-  const d = typeof value === "string" ? new Date(`${value}T00:00:00Z`) : value;
-  return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-  );
+/** A date-only database field carrying the Kuala Lumpur calendar day. */
+function toMalaysiaDay(value: Date | string): Date {
+  return typeof value === "string"
+    ? new Date(`${value}T00:00:00Z`)
+    : malaysiaCalendarDate(value);
 }
 
 function toIsoDay(date: Date): string {
@@ -34,9 +34,9 @@ function toIsoDay(date: Date): string {
  */
 export async function recordFollowerSnapshot(
   instagramAccountId: string,
-  followersCount: number
+  followersCount: number,
 ): Promise<void> {
-  const date = toUtcDay(new Date());
+  const date = toMalaysiaDay(new Date());
 
   await prisma.followerSnapshot.upsert({
     where: { instagramAccountId_date: { instagramAccountId, date } },
@@ -60,7 +60,7 @@ export async function recordFollowerSnapshot(
  */
 export function reconstructFollowerTotals(
   series: FollowerCountPoint[],
-  currentFollowers: number
+  currentFollowers: number,
 ): Array<{ date: string; followers: number }> {
   const ascending = [...series].sort((a, b) => a.date.localeCompare(b.date));
   const out: Array<{ date: string; followers: number }> = [];
@@ -91,7 +91,7 @@ export async function backfillFollowerHistory(
   instagramAccountId: string,
   accessToken: string,
   instagramId: string,
-  currentFollowers: number
+  currentFollowers: number,
 ): Promise<number> {
   let series: FollowerCountPoint[] | null;
   try {
@@ -104,7 +104,7 @@ export async function backfillFollowerHistory(
   if (!series?.length) return 0;
 
   const totals = reconstructFollowerTotals(series, currentFollowers).map(
-    (t) => ({ date: toUtcDay(t.date), followers: t.followers })
+    (t) => ({ date: toMalaysiaDay(t.date), followers: t.followers }),
   );
   if (!totals.length) return 0;
 
@@ -134,8 +134,8 @@ export async function backfillFollowerHistory(
           backfilled: true,
         },
         update: { followersCount: t.followers, backfilled: true },
-      })
-    )
+      }),
+    ),
   );
 
   return writable.length;
@@ -147,9 +147,9 @@ export async function backfillFollowerHistory(
  */
 export async function getFollowerHistory(
   instagramAccountId: string,
-  days: number = 90
+  days: number = 90,
 ): Promise<FollowerHistoryPoint[]> {
-  const since = toUtcDay(new Date());
+  const since = toMalaysiaDay(new Date());
   since.setUTCDate(since.getUTCDate() - Math.max(days, 1));
 
   const rows = await prisma.followerSnapshot.findMany({
@@ -172,7 +172,7 @@ export async function getFollowerHistory(
  */
 export async function ensureFollowerHistory(
   account: { id: string; instagramId: string },
-  accessToken: string
+  accessToken: string,
 ): Promise<number | null> {
   const info = await getUserInfo(accessToken);
   const followers = info.followers_count;
@@ -188,7 +188,7 @@ export async function ensureFollowerHistory(
       account.id,
       accessToken,
       account.instagramId,
-      followers
+      followers,
     );
   }
 

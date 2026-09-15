@@ -22,6 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { formatMalaysiaDate } from "@/lib/malaysia-time";
 
 export interface FollowerChartPoint {
   date: string;
@@ -42,10 +43,9 @@ function formatCompact(n: number): string {
 }
 
 function formatDay(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+  return formatMalaysiaDate(`${iso}T00:00:00Z`, {
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
   });
 }
 

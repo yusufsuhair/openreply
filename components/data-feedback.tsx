@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatMalaysiaTime } from "@/lib/malaysia-time";
 
 export default function DataFeedback({
   loading,
@@ -30,7 +31,7 @@ export default function DataFeedback({
               ? "Updating…"
               : "Loading…"
             : updatedAt
-              ? `Updated ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+              ? `Updated ${formatMalaysiaTime(updatedAt)}`
               : ""}
       </p>
       <div className="flex items-center gap-2">
