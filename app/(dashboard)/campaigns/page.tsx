@@ -40,6 +40,10 @@ interface Campaign {
   requireFollow: boolean;
   followPromptMessage: string | null;
   followPromptButtonLabel: string | null;
+  followUpEnabled: boolean;
+  followUpMessage: string | null;
+  followUpDelayMinutes: number;
+  linkButtonLabel: string | null;
   isActive: boolean;
   wholeWordMatch: boolean;
   instagramAccountId: string;
@@ -233,6 +237,10 @@ export default function CampaignsPage() {
           requireFollow: auto.requireFollow,
           followPromptMessage: auto.followPromptMessage,
           followPromptButtonLabel: auto.followPromptButtonLabel,
+          followUpEnabled: auto.followUpEnabled,
+          followUpMessage: auto.followUpMessage,
+          followUpDelayMinutes: auto.followUpDelayMinutes,
+          linkButtonLabel: auto.linkButtonLabel,
           wholeWordMatch: auto.wholeWordMatch,
           isActive: false,
         }),
